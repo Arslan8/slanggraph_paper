@@ -18,7 +18,8 @@ Science appendix.
 - E2 deterministic local canaries for no defense, Progent, Eydii, Forge,
   Nuggets, and the scoped CaMeL post-validation case.
 - Matched hot-path benchmark on October 7, 2026: 593.701 us disabled,
-  672.212 us cap-only, and 884.800 us with five no-op modules.
+  672.212 us cap-only (13.2% overhead), and 884.800 us with five no-op modules
+  (49.0% overhead).
 
 ## Required before submission
 
@@ -35,4 +36,3 @@ Science appendix.
 - Produce a history-free anonymous artifact with a stable SEC27 URL.
 - Add author names, affiliations, ORCIDs, acknowledgments, and the stable public
   artifact URL only for the camera-ready version.
-

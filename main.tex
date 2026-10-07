@@ -10,9 +10,6 @@
 
 \newcommand{\sys}{\textsc{slangGraph}\xspace}
 \newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\yes}{\ensuremath{\bullet}}
-\newcommand{\some}{\ensuremath{\circ}}
-\newcommand{\no}{--}
 
 \begin{document}
 \date{}
@@ -41,8 +38,8 @@ resource limits, bounded data-only results, and termination-aware flow state.
 Across eight vulnerable tools, deterministic canaries show that call-boundary
 defenses can approve calls whose implementations reach unauthorized sinks. The
 accepted Linux contract passes 55 focused kernel and flow tests and the complete
-518-test upstream-compatible suite. Matched microbenchmarks add 78.5~$\mu$s for
-capability-only mediation and 291.1~$\mu$s for five modules. \sys does not infer
+518-test upstream-compatible suite. Matched microbenchmarks show 13.2\% overhead
+for capability-only mediation and 49.0\% for five modules. \sys does not infer
 user intent or claim automatic noninterference; it makes authorized authority,
 its enforcing components, and activation evidence explicit.
 \end{abstract}
@@ -499,7 +496,7 @@ third-party deployment was attacked.
 
 \subsection{Q1: expressiveness and completeness}
 
-Table~\ref{tab:features} compares security mechanisms, not benchmark utility.
+Figure~\ref{fig:features} compares security mechanisms, not benchmark utility.
 Progent provides particularly expressive argument rules and verified monotonic
 policy updates. SEAgent adds history-sensitive mandatory policy. CaMeL provides
 strong control/data-flow separation and capabilities. \sys borrows these
@@ -507,27 +504,16 @@ directions but addresses a different composition point: it combines tool-owned
 DAC, multiple independently authored restrictive modules, exact enforcement
 obligations, replaceable platform adapters, and activation evidence.
 
-\begin{table*}[t]
+\begin{figure*}[t]
 \centering
-\small
-\begin{tabular}{lccccccccc}
-\toprule
-System & DAC & Args & Flow & Stack & Narrow & Deleg. & Confine & Adapters & Evidence \\
-\midrule
-Progent & \no & \yes & \some & \no & \yes & \some & \no & \no & \no \\
-SEAgent & \no & \yes & \yes & \no & \no & \yes & \no & \no & \no \\
-CaMeL & \no & \yes & \yes & \no & \some & \no & \no & \no & \no \\
-\sys & \yes & \yes & \yes & \yes & \yes & \yes & \yes & \yes & \yes \\
-\bottomrule
-\end{tabular}
+\includegraphics[width=\textwidth]{figures/expressiveness.pdf}
 \caption{Qualitative comparison from the systems' published designs.
-\yes=provided; \some=provided for a narrower policy model; \no=not provided.
 ``Confine'' means enforcement below an admitted implementation, not rejection
 of a proposed call. ``Narrow'' includes monotonic policy updates or semantic
 argument attenuation in the system's stated model. No prior system is claimed
 inferior in its own target model; the novelty is the joint column set.}
-\label{tab:features}
-\end{table*}
+\label{fig:features}
+\end{figure*}
 
 To our knowledge, no prior agent-security framework jointly provides all nine
 properties. This is our expressiveness claim: it concerns the range and
@@ -546,7 +532,7 @@ each defense generously: a sink counts mediated whenever a sound argument
 constraint could dominate every tainted path, even if the released policy omits
 that constraint.
 
-Table~\ref{tab:exposure} reports exposed sinks. Policy-only \sys is intentionally
+Figure~\ref{fig:exposure} reports exposed sinks. Policy-only \sys is intentionally
 8/8: an authorization decision is not mislabeled as confinement. Progent
 mediates the explicit delegation boundary but leaves seven implementation sinks
 below its check. CaMeL's data-flow model covers the eight headline paths under
@@ -556,26 +542,13 @@ model covers local file/process effects but not semantic services; a composed
 host+service+resource model covers all eight. The projected rows motivated the
 adapter design and are not dynamic evidence.
 
-\begin{table}[t]
+\begin{figure}[t]
 \centering
-\small
-\begin{tabular}{lr}
-\toprule
-Mediation model & Exposed sinks (of 8) \\
-\midrule
-None & 8 \\
-Three LangChain wrappers & 8 each \\
-Progent & 7 \\
-CaMeL (generous tag model) & 0 \\
-\sys policy only & 8 \\
-\sys host adapter (projected) & 4 \\
-\sys composed (projected) & 0 \\
-\bottomrule
-\end{tabular}
+\includegraphics[width=\columnwidth]{figures/exposure.pdf}
 \caption{Static E1 exposure. Projected adapter rows model capability and host
 availability; they are not runtime blocking results.}
-\label{tab:exposure}
-\end{table}
+\label{fig:exposure}
+\end{figure}
 
 The deterministic E2 canaries then ask a narrower runtime question: can a
 policy-conformant call reach an unauthorized implementation sink? All eight
@@ -628,27 +601,21 @@ interface presence and happy-path tests are insufficient evidence.
 
 We ran matched \code{pytest-benchmark} cases on the same checkout and host. Each
 case invokes a no-op tool through a complete synchronous \code{ToolNode}; the
-only change is security configuration. Table~\ref{tab:perf} reports medians. The
-capability-only path adds 78.5~$\mu$s, below the 200~$\mu$s target. Five no-op
-modules add 291.1~$\mu$s, below the 1~ms target. These numbers measure in-process
-policy mediation, not fresh Linux worker launch.
+only change is security configuration. Figure~\ref{fig:perf} reports overhead
+relative to the security-disabled median. Capability-only mediation increases
+median latency by 13.2\% (593.701 to 672.212~$\mu$s); five no-op modules increase
+it by 49.0\% (to 884.800~$\mu$s). The corresponding absolute increments remain
+below the 200~$\mu$s and 1~ms engineering targets. These numbers measure
+in-process policy mediation, not fresh Linux worker launch.
 
-\begin{table}[t]
+\begin{figure}[t]
 \centering
-\small
-\begin{tabular}{lrrr}
-\toprule
-Configuration & Median & Increment & Rounds \\
-\midrule
-Security disabled & 593.701~$\mu$s & -- & 500 \\
-DAC + cap & 672.212~$\mu$s & 78.511~$\mu$s & 842 \\
-Five modules & 884.800~$\mu$s & 291.099~$\mu$s & 889 \\
-\bottomrule
-\end{tabular}
-\caption{Matched policy-path microbenchmark, Python 3.12.3. Fresh-worker
-latency is intentionally not inferred from these measurements.}
-\label{tab:perf}
-\end{table}
+\includegraphics[width=\columnwidth]{figures/overhead.pdf}
+\caption{Median policy-path overhead relative to security disabled, Python
+3.12.3. Fresh-worker latency is intentionally not inferred from these
+measurements.}
+\label{fig:perf}
+\end{figure}
 
 With security omitted, the upstream execution path remains the default. New
 request fields have defaults, and no LangChain Core class is modified. The full
