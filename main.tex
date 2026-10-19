@@ -25,22 +25,24 @@ return sensitive data that later leaves through model context or an output
 callback. We call the difference between an authorized call and its reachable
 effects the \emph{effect gap}.
 
-We present \sys, a layered reference monitor for LangGraph. A single router
-mediates framework objects---including calls, state, checkpoints, model input,
-and output---while a confined worker and the host kernel mediate files, syscalls,
-and resources. Policy produces an exact, platform-neutral grant. The runtime
-releases a worker only after exact-or-tighter lowering and activation evidence
-bind that grant to the worker and enforcing mechanisms. Open object classes
-extend the same contract to application resources without changing the policy
-language.
+We present \sys, a layered reference monitor for LangGraph. On configured
+secured paths, a shared router mediates framework objects---including calls,
+state, checkpoints, model input, and output---while Linux execution adapters
+mediate host resources. Explicit policy produces a platform-neutral grant.
+An enforced execution requires conservative lowering and activation evidence
+for its selected adapter and host. A deployment-backed adapter additionally
+binds declared tool contents and an optional packaged runtime to exact OSTree
+commits across approval and recovery. We also specify an open-object-class
+extension for application resources.
 
 Eight executable canaries demonstrate the effect gap: call-boundary defenses
 approve policy-conformant calls whose implementations reach unauthorized sinks.
 For the implemented boundary, a source-bound certificate verifies all 21
 catalogued router obligations; an independent verifier passes 15,744 Tool API
-conformance cases; and all 151 focused router, object-manager, and Linux tests
-pass, exercising descriptor-bound Landlock rules, raw syscalls, descendants,
-and activation failures. Policy-only
+conformance cases; and a recorded focused run passes 151 router, object-manager,
+and Linux tests, exercising descriptor-bound Landlock rules, raw syscalls,
+descendants, and activation failures. These records retain their own source
+snapshots and do not establish a current whole-system verification pass. Policy-only
 mediation adds 13.2\% latency in our recorded microbenchmark. We do not claim
 whole-framework complete mediation: several upstream placement paths remain
 open, and the paper reports them as coverage failures rather than redefining
@@ -97,8 +99,9 @@ X, D-Bus, and PostgreSQL use this structure~\cite{selinuxnotebook,sepgsql};
 framework-owned resources, and the host kernel remains the monitor for OS
 resources.
 
-Three principles organize the system. First, all framework operations enter one
-refusing dispatch path, \code{HostRouter}. Second, policy names semantic
+Three principles organize the system. First, every protected framework operation
+must enter the shared refusing path, \code{HostRouter}; missing placement is an
+implementation failure against this requirement. Second, policy names semantic
 authority rather than Linux mechanisms: author-owned discretionary policy
 constructs a finite candidate, and mandatory policy may only remove authority.
 Third, a decision or plan is not proof of enforcement. A worker is released only
@@ -112,11 +115,12 @@ This paper makes three contributions:
   authorizing a tool call and bounding the effects of its implementation and
   subsequent framework data paths.
   \item We design a layered reference monitor that composes one framework object
-  manager with exact host confinement, restrict-only policy composition, open
-  semantic object classes, and evidence-gated execution.
+  manager with host-dependent conservative confinement, restrict-only policy
+  composition, and evidence-gated execution. We specify open semantic object
+  classes as an extension of this contract.
   \item We implement the design in LangGraph and evaluate its current boundary
-  using executable canaries, a source-bound router certificate, exhaustive Tool
-  API conformance, Linux integration tests, and policy-path benchmarks. We also
+  using executable canaries, a source-bound router certificate, a declared finite
+  Tool API conformance matrix, Linux integration tests, and policy-path benchmarks. We also
   publish the paths that remain outside the complete-mediation claim.
 \end{itemize}
 
@@ -128,11 +132,13 @@ This paper makes three contributions:
 Let a proposed call be $c=(p,t,a,h)$: principal $p$, tool $t$, arguments $a$,
 and security history $h$. A call monitor computes an authorization decision
 $D(c)$. Let $G(c)$ denote the authority intended by an allow decision, and let
-$E(t,a)$ be the effects reachable from executing the implementation and
-publishing its result. The desired property is
+$E_{B,H}(c)$ denote the authority-bearing effects reachable through runtime
+boundary $B$ on host $H$, projected onto the claimed authority domains and
+including publication of the result. For an enforced execution, the desired
+property is
 
 \begin{equation}
-  E(t,a) \subseteq G(c).
+  E_{B,H}(c) \subseteq G(c).
   \label{eq:effect}
 \end{equation}
 
@@ -177,8 +183,10 @@ line was enforced and whether those mechanisms were active for this worker.
 
 \paragraph{Monotonic authority.}
 Preparation, delegation, policy modules, and lowering may preserve or reduce
-authority; they may not silently widen it. An unsupported rule denies unless an
-operator explicitly accepts a degraded, non-confining execution.
+authority; they may not silently widen it. An unsupported required obligation
+denies. Explicit waivers are limited to obligations eligible for degradation;
+they do not waive identity binding, default deny, or isolation before import.
+Degraded executions do not carry the complete grant-subset claim.
 
 \subsection{Threat model}
 
@@ -190,7 +198,9 @@ malformed results, resource exhaustion, cancellation, and stale checkpoints.
 The framework TCB contains authentication, the coordinator and router, policy
 backend, modules, canonicalizers, grant compiler, framework adapters, audit and
 flow stores, and operator-promoted trusted nodes. The host TCB contains the
-kernel, launcher, enforcement adapter, and supervisor. Kernel compromise, side
+kernel, launcher, enforcement adapter, and supervisor. In deployment mode, the
+deployment manager, its protected store, and approved runtime publishers also
+belong to the TCB. Kernel compromise, side
 channels, denial of service, the model-provider channel, and trusted-node reads
 are outside the claim. Task intent is also separate: exact authority does not
 prove that an allowed action is beneficial.
@@ -200,25 +210,29 @@ prove that an allowed action is beneficial.
 
 Figure~\ref{fig:architecture} shows the two-layer design. A framework operation
 enters \code{HostRouter} with an authenticated principal and immutable request.
-Policy constructs an exact grant. Framework effects remain inside the object
-manager; host effects are lowered by a trusted parent into a fresh worker's
-Landlock, seccomp, and resource-control configuration. Execution begins only
-after an activation receipt passes verification.
+Policy constructs a grant. Framework effects use the object manager; a selected
+Linux adapter constrains host effects. The Landlock path uses a fresh worker
+with filesystem, syscall, and resource controls. The deployment-backed path uses
+bubblewrap and seccomp. Their integration coverage differs, as detailed in
+Section~\ref{sec:linux}. The enforced contract requires verified activation
+before release.
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/architecture.pdf}
   \caption{\sys architecture. Framework and host objects have different
-  enforcers but share one authorization and evidence chain. The protected
+  enforcers and are intended to share one authorization and evidence chain.
+  The host row depicts the Landlock path; the separate deployment-backed
+  bubblewrap path is described in Section~\ref{sec:deployments}. The protected
   operation inventory is fixed independently of current placement success.}
   \label{fig:architecture}
 \end{figure*}
 
 \subsection{One scope rule}
 
-An operation is in scope if and only if a hook on the single dispatch path can
-refuse it. This rule avoids two tempting but unsound shortcuts. First, a
-permissive default does not remove an object from the security model. Second,
+The protected-operation inventory defines scope independently of current hook
+placement. Every operation in that inventory must reach a refusing route.
+A permissive default does not remove an object from the security model, and
 adding an adapter or a passing example does not establish that every upstream
 path uses it. Missing placement remains a coverage failure.
 
@@ -246,8 +260,8 @@ Output & emit to destination \\
 HostResource & file, socket, exec, syscall, limits \\
 \bottomrule
 \end{tabularx}
-\caption{Protected object classes. Scope is defined by refusing operations, not
-by shipped policy defaults.}
+\caption{Protected object classes. The inventory defines the operations that
+require refusing routes, independently of shipped policy defaults or placement.}
 \label{tab:objects}
 \end{table}
 
@@ -359,19 +373,22 @@ reauthorized; a resource-changing transform must prove semantic attenuation over
 typed actions and selectors. String length, structural similarity, and module
 trust are not authority orderings.
 
-\subsection{Open semantic object classes}
+\subsection{Proposed open semantic object classes}
 
 Agent applications manipulate resources a framework cannot enumerate in
 advance: database tables, secrets, queues, browser origins, cloud objects, and
-service recipients. A \code{class} declaration names an operation vocabulary,
+service recipients. In the proposed extension, a \code{class} declaration names
+an operation vocabulary,
 object kind, trusted canonicalizer, policy-visible attributes, enforcement
 locus, and lowering adapter. Tool profiles then request concrete \code{need} or
 \code{want} lines over that class.
 
-The registry derives typed Cedar actions and entities from the declaration.
-Canonicalizers may emit only declared attributes. Every class must name a
-kernel, broker, resource-side, or framework enforcer. This keeps the grammar
-open without making enforcement optional.
+The proposed registry would derive typed Cedar actions and entities from the
+declaration. Canonicalizers may emit only declared attributes, and every class
+must name a kernel, broker, resource-side, or framework enforcer. This is a
+design requirement for extending the shipped resource families; it is not
+evidence that arbitrary class declarations or their service adapters are
+implemented.
 
 \subsection{Exact grants and conservative lowering}
 
@@ -381,12 +398,22 @@ selector, conditions, requirement identity, and provenance. The baseline makes
 interpreter roots, tool packages, descriptors, environment, and protocol
 channels visible authority rather than adapter entitlements.
 
-Every grant line lowers as \emph{exact}, \emph{tightened}, or
-\emph{unsupported}. Exact preserves the represented authority; tightened
-implements a subset; unsupported denies. An operator may explicitly waive a
-class, but the waiver is bound into the grant and yields a degraded receipt with
-no confinement claim. The adapter may never approximate an endpoint rule with
-``network allowed'' or add a runtime dependency after policy.
+Each enforcement obligation is assessed as \emph{exact}, \emph{tightened}, or
+\emph{unsupported}. Tightening may remain \code{ENFORCED} when the requirement
+ledger and all required obligations are satisfied. Unsupported obligations deny
+unless the trusted caller explicitly selects an obligation marked waivable.
+The current compiler marks only non-baseline \code{want} operation obligations
+waivable; runtime-baseline needs and default-deny complements cannot be waived.
+Waived identifiers enter the plan digest, and the receipt binds that plan and
+records \code{DEGRADED}. This does not certify the complete original grant or
+remove the remaining confinement. The bubblewrap invocation path supplies no
+waivers. Static checker waivers are separate review assumptions.
+
+Host capabilities are probed for the selected adapter. The same declared policy
+can be enforced exactly, conservatively tightened, explicitly degraded on a
+supporting path, or denied on different hosts. A packaged runtime does not
+supply a missing kernel mechanism. No adapter may replace an endpoint rule with
+``network allowed'' or silently add a runtime dependency after policy.
 
 \subsection{Activation receipts}
 
@@ -403,11 +430,15 @@ where intended authority becomes an enforced execution.
 \section{Linux Enforcement}
 \label{sec:linux}
 
-The Linux backend uses Landlock as its primary filesystem mechanism, seccomp for
-syscall classes, cgroup v2 or rlimits for resources, and a supervisor for
-lifetime. It requires no user namespace. This choice avoids making confinement
-depend on unprivileged namespace settings that distributions increasingly
-restrict~\cite{landlock,seccomp}.
+The implementation has two Linux execution paths. The namespace-free
+\code{LandlockSandboxExecutor} uses Landlock for filesystem restrictions,
+seccomp for syscall classes, cgroup v2 or rlimits for resources, and a supervisor
+for lifetime~\cite{landlock,seccomp}. The separate
+\code{LinuxSandboxExecutor} uses bubblewrap namespaces and seccomp and
+integrates OSTree tool and runtime deployments~\cite{bubblewrap}. It requires
+the namespace features used by its launcher. Supported authority, receipt
+construction, and deployment integration must be reported per adapter.
+The next two subsections describe the Landlock path.
 
 \subsection{Confinement before import}
 
@@ -446,41 +477,83 @@ physical-memory guarantee as exact. A supervisor owns wall time. If cancellation
 cannot establish whether an irreversible effect committed or the worker died,
 the outcome is \code{INDETERMINATE} and flow reservations remain durable.
 
+\subsection{Versioned tool and runtime deployments}
+\label{sec:deployments}
+
+Flatpak separates application content from shared runtimes and uses OSTree to
+store and distribute versioned filesystem trees~\cite{flatpak,ostree}.
+\sys reuses this deployment model to identify the code admitted for a call.
+A tool bundle contains an entrypoint, explicitly packaged dependencies,
+read-only data, and a manifest in the same commit. A separate runtime commit
+can contain the interpreter, standard library, loader, and native libraries.
+This is a declaration and enforcement boundary: it does not infer policy or
+discover every dependency arbitrary code may load.
+
+For a manager-backed call, a trusted deployment manager resolves the selected
+ref before policy preparation and records the exact commit against the
+principal, session, tool, and call identity. The grant keeps the primary-file
+digest and adds separate tool-deployment and runtime digests. Approval,
+activation evidence, and audit bind the selected versions. Retry and
+authenticated checkpoint recovery reuse the original selection while rerunning
+the applicable security checks. New calls may resolve a moved channel.
+
+The bubblewrap adapter mounts validated checkouts read-only and starts the
+selected runtime interpreter. In packaged-runtime mode it does not mount host
+\path{/usr}, \path{/lib}, or \path{/lib64}. The trusted worker shim remains
+separately pinned operator code. These bindings are not yet integrated into
+\code{LandlockSandboxExecutor}; its namespace-free path must not inherit the
+deployment path's claims or measurements.
+
+The manager also implements publisher-verified pulls, durable invocation
+references, and execution leases. These are mechanisms requiring further
+lifecycle validation, not evidence of complete deployment integrity. Current
+review priorities include separating mutable channel names from release names,
+making database-only retained commits visible to OSTree pruning, and requiring
+a manager or an explicit operator-retention contract for static deployment
+specifications. Read-only worker mounts do not protect a store writable by a
+malicious process with the manager's host identity.
+
 \section{Security Argument}
 \label{sec:argument}
 
-We state the claim for an operation whose framework route is certified and whose
-host receipt verifies. It is conditional on the TCB and mechanism semantics in
-Section~\ref{sec:gap}.
+This is a conditional design argument for an \code{ENFORCED} operation. It
+assumes correct placement, effective-object binding by every downstream
+adapter, and verified host evidence, in addition to the TCB and mechanism
+semantics in Section~\ref{sec:gap}. A router certificate alone does not
+discharge those composition assumptions.
 
 \paragraph{No policy grant path.}
-Owner and principal/share policy construct candidate lines. Mandatory policy is
-forbid-only. Preparation and delegation require semantic subset checks. Thus no
-module ordering, transform, or child dispatch can convert prior denial into
-authority.
+For a fixed principal, candidate, policy version, and relevant context, owner
+and principal/share policy construct candidate lines and mandatory policy can
+only restrict them. Preparation and delegation require semantic subset checks.
+A changed context requires fresh authorization; module order or a transform
+cannot itself add authority to the original candidate.
 
 \paragraph{No silent lowering expansion.}
 Every semantic rule and baseline line has exactly one enforcement disposition.
-Exact and tightened lowerings represent subsets of the grant. Unsupported lines
-deny or produce an explicitly degraded, non-confining receipt. Therefore a
+Exact and tightened lowerings represent subsets of the grant. Unsupported
+required obligations deny; an eligible explicit waiver produces a degraded
+receipt outside the complete grant-subset claim. Therefore a
 verified enforced receipt cannot silently retain broader authority in an owned
 domain.
 
 \paragraph{Worker authority is bound before execution.}
-Untrusted imports occur only after descriptor cleanup, Landlock restriction,
-seccomp, and resource controls. Receipt verification precedes the release
-barrier and binds the observed worker to the request and grant. Worker output is
-not accepted as setup evidence.
+The selected backend must complete descriptor cleanup and its confinement
+setup before untrusted import. The Landlock and bubblewrap paths use different
+activation implementations and require separate evidence. The enforced contract
+binds the observed worker to the request and grant before the release barrier;
+ordinary worker output cannot substitute for setup evidence.
 
 \paragraph{Framework effects remain mediated.}
 For a certified router path, dispatch consumes authorization for the same
 principal and immutable request. State, model, and output effects require their
 own operations; authorization for tool invocation does not authorize them.
 
-Together these properties establish Equation~\ref{eq:effect} for the certified
-framework routes and supported host authority domains. They do not establish it
-for an unplaced upstream path. That distinction is central: component evidence
-is not promoted into a whole-system theorem.
+Under these assumptions, exact and tightened enforcement support
+Equation~\ref{eq:effect} for the covered routes and host authority domains.
+This subset relation does not guarantee useful execution or successful
+completion. The current component evidence does not establish the assumptions
+for every adapter or upstream path, and is not a whole-system theorem.
 
 \section{Evaluation}
 \label{sec:evaluation}
@@ -527,9 +600,10 @@ That 1/1 result is not a general bypass claim against CaMeL.
 Table~\ref{tab:evidence} reports evidence at each layer. The router analyzer
 discovers entries independently of the admission catalog and verifies all 21
 current obligations under its documented contracts. The Tool API verifier
-passes 15,744 cases across inherited execution surfaces and adapters. A focused
-current run of router, object-manager, layered-verification, Landlock, and Linux
-execution tests passes all 151 cases (4 warnings) in 15.84 seconds.
+passes 15,744 cases across inherited execution surfaces and adapters. A recorded
+focused run of router, object-manager, layered-verification, Landlock, and Linux
+execution tests passes all 151 cases (4 warnings) in 15.84 seconds. These
+recorded totals are not a newly executed release gate.
 
 \begin{table*}[t]
 \centering
@@ -542,7 +616,8 @@ Router & 21 discovered, 21 obligated, 21 verified dispatch entries & Complete fo
 Tool API & 15,744 conformance cases & Passing inherited-surface inventory \\
 Framework objects & Refusing entries and sync/async tests for dispatch, registry, state/store, checkpoint, model, output, approval & Partial automatic placement \\
 Linux host & Descriptor-bound Landlock, raw syscall, descendant, magic-link, seccomp, activation, and resource-control tests & Implemented host subset \\
-Services & Open-class broker/resource loci and exact receipt contract & Phase two; not runtime evidence \\
+Deployments & Tool/runtime commit binding, checkout validation, invocation references, and leases & Bubblewrap path; lifecycle validation remains \\
+Services & Proposed open-class broker/resource loci and receipt contract & Design; no general open-class runtime claim \\
 \bottomrule
 \end{tabularx}
 \caption{Evidence is reported per layer. Passing a component does not establish
@@ -561,6 +636,30 @@ Automatic coverage of every value, publication, checkpoint, and dispatch path,
 plus an authenticated untrusted-node host, remains open. These are not cosmetic
 TODOs: each is a route by which component-correct enforcement could fail to
 compose.
+
+The later source review records four implementation diagnostics: synchronous
+and asynchronous backing-store reads publish values without effective-value
+mediation (\code{SGV107}), and checkpoint-history enumeration publishes tuples
+without per-tuple envelope and principal/session authentication (\code{SGV108}).
+These are source-review findings, not executed bypass demonstrations. Separate
+\code{SGV901}--\code{SGV903} obligations remain for placement, adapter
+composition, and host/isolation composition. The recorded default and
+compatibility completeness gates fail despite the passing router certificate
+and API matrix. These findings require a fresh report tied to the evaluation
+revision before submission.
+
+\paragraph{Deployment evidence.}
+The checked-in deployment regression suite uses a fake OSTree command, including
+tests that subsequently invoke a real sandbox and may skip without host support.
+A separate development record reports real OSTree 2024.5 and bubblewrap on
+October 18, 2026: tool A/B identity, runtime selection A/B/A across a channel move,
+SQLite checkpoint restart, signed-commit acceptance, and unsigned-commit
+rejection. That record is distinct from a reproducible checked-in real-OSTree
+integration run. The record reports mean latency over five post-warmup
+invocations per path: 142.575~ms for the legacy secured path and 209.780~ms with
+tool deployment. These observations do not measure
+Landlock or establish general performance. Real object pruning and the lifecycle
+cases in Section~\ref{sec:deployments} remain required experiments.
 
 An earlier frozen Linux milestone passed the complete 518-test prebuilt command
 and 55 focused tests. We retain those results as historical compatibility
@@ -597,6 +696,14 @@ Adapters exist for the framework objects in Table~\ref{tab:objects}, but several
 general graph, state, checkpoint, completion-callback, and publication paths
 are not automatically routed. Direct Store references and trusted in-process
 compatibility paths remain outside the composed claim.
+
+\paragraph{Deployment integrity has a separate boundary.}
+Version selection covers declared packaged contents, not inferred dependency
+closure, reproducible builds, or every input a tool might interpret as code.
+The operator must protect the store and separately trusted worker. Manager-free
+static specifications and incomplete pruning integration cannot carry the same
+automatic-retention claim as a fully validated manager-backed lifecycle.
+Deployment integration with Landlock remains open.
 
 \paragraph{Useful service confinement is phase two.}
 Mail, SQL, cloud, and endpoint-scoped network tools require trusted brokers or
@@ -647,6 +754,15 @@ objects~\cite{selinuxnotebook,sepgsql}. Prior work shows that authorization-hook
 placement itself requires systematic analysis~\cite{zhang2002cqual}. \sys
 adapts these ideas to framework objects and agent execution paths.
 
+\paragraph{Flatpak deployments and portals.}
+Flatpak provides application/runtime separation, versioned distribution, and
+mediated host access through portals~\cite{flatpak,ostree,portals}.
+Our deployment-backed adapter reuses OSTree and bubblewrap. The agent-specific
+work is connecting selected code to principal/request authorization, approval,
+activation evidence, and durable retry and checkpoint identity. Portal guidance
+on validated requests and trusted resource handles also informs future broker
+operations; a general desktop-portal integration is not implemented.
+
 \paragraph{Sandboxing and authorization.}
 Landlock provides unprivileged, monotonic restriction over filesystem and port
 objects~\cite{landlock}; seccomp restricts syscall classes~\cite{seccomp}. Cedar
@@ -664,9 +780,10 @@ requiring evidence before execution.
 
 The current implementation establishes this chain for a certified router subset
 and a Linux host subset. It does not yet establish whole-framework complete
-mediation, and the remaining placement failures are part of the result. That
-honesty is not merely caution: a reference monitor is defined as much by the
-paths it cannot miss as by the policies it can express.
+mediation, and the remaining placement failures are part of the result. Versioned
+deployments add a separate code-identity boundary on the bubblewrap path. Closing
+the remaining placement, adapter-composition, and deployment-lifecycle gaps is
+necessary before extending either claim.
 
 \bibliographystyle{plain}
 \bibliography{references}
@@ -705,6 +822,13 @@ for policy correctness, TCB maintenance, user notice, and recovery from
   \path{libs/prebuilt}; checked reports live under \path{docs/security/}.
   \item Linux enforcement: \path{libs/prebuilt/tests/security/test_landlock.py}
   and \path{test_linux_execution.py}.
+  \item OSTree deployment implementation:
+  \path{libs/prebuilt/langgraph/prebuilt/security/deployment.py} and
+  \path{libs/prebuilt/tests/security/test_deployment.py}; development observations:
+  \path{docs/security/ostree-deployment-measurements.md}.
+  \item Current composition findings and failed completeness gates:
+  \path{docs/security/host-routing-completeness.md} and
+  \path{docs/security/developer-verification-report.json}.
   \item Effect-gap canaries: \path{eval/reports/e2/}; static traces:
   \path{eval/reports/e1/exposure.json}.
   \item Policy overhead: \path{libs/prebuilt/benchmarks/}.

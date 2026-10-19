@@ -8,16 +8,25 @@ make
 make check
 ```
 
-`make` regenerates the vector evaluation figures with Matplotlib before building
-the paper. The plotting source and recorded inputs live in
-`scripts/generate_figures.py`.
+`make` regenerates the three vector figures with Matplotlib before building
+the paper. The plotting source and currently hard-coded benchmark medians live
+in `scripts/generate_figures.py`. Set `PYTHON=/path/to/python` to choose the
+interpreter. `make check` verifies basic PDF readability and font embedding;
+it does not certify venue page limits, anonymity, or evidence completeness.
 
-The paper's current architecture is grounded in slangGraph revision `53c5d317`
-and the accompanying object-class design work. Quantitative claims retain their
-own recorded implementation revisions; the manuscript does not attribute an
-older bubblewrap measurement to the current Landlock backend. Static capability
-projections and incomplete framework placement are labeled explicitly rather
-than presented as runtime enforcement or whole-system results.
+The paper's implementation baseline is slangGraph revision `53c5d317`.
+It distinguishes the namespace-free Landlock executor from the bubblewrap
+executor that integrates OSTree tool/runtime deployments. General open object
+classes remain a proposed language extension. Quantitative claims retain their
+own recorded implementation revisions; policy-only and bubblewrap measurements
+must not be attributed to Landlock. Static projections, fake-OSTree regression
+tests, recorded development observations, and incomplete framework placement
+are identified separately.
+
+The first alignment revision also identifies deployment lifecycle work and the
+recorded SGV107/SGV108 adapter findings. The router certificate and finite API
+matrix do not establish a complete system verification pass. See
+`SUBMISSION_CHECKLIST.md` for the code fixes and experiments still required.
 
 Before submission, create a history-free anonymous artifact snapshot and replace
 the placeholder Open Science URL. Do not put author names or affiliations in

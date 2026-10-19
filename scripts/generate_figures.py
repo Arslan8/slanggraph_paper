@@ -111,19 +111,19 @@ def motivation() -> None:
     _box(left, (3.5, 3.9), 2.2, 1.0, "Call guard\nALLOW", facecolor="#d9d9d9")
     _box(
         left,
-        (6.8, 3.9),
-        2.6,
+        (6.5, 3.9),
+        3.2,
         1.0,
         "Tool\nimplementation",
         facecolor="#f2f2f2",
         fontsize=6.6,
     )
     _arrow(left, (2.4, 4.4), (3.5, 4.4))
-    _arrow(left, (5.7, 4.4), (6.8, 4.4))
-    _box(left, (5.8, 1.1), 1.9, 0.9, "payroll.csv\nREAD", edgecolor="#8c1d18")
-    _box(left, (8.0, 1.1), 1.8, 0.9, "attacker.net\nSEND", edgecolor="#8c1d18")
-    _arrow(left, (7.75, 3.9), (6.8, 2.0), color="#8c1d18")
-    _arrow(left, (8.45, 3.9), (8.9, 2.0), color="#8c1d18")
+    _arrow(left, (5.7, 4.4), (6.5, 4.4))
+    _box(left, (4.65, 1.1), 2.5, 0.9, "payroll.csv\nREAD", edgecolor="#8c1d18", fontsize=6.6)
+    _box(left, (7.4, 1.1), 2.5, 0.9, "attacker.net\nSEND", edgecolor="#8c1d18", fontsize=6.6)
+    _arrow(left, (7.75, 3.9), (5.9, 2.0), color="#8c1d18")
+    _arrow(left, (8.45, 3.9), (8.65, 2.0), color="#8c1d18")
     left.text(7.8, 0.35, "effects occur below the check", ha="center", color="#8c1d18", fontsize=7.2)
 
     right.set_title("(b) Layered reference monitoring", fontweight="bold", pad=4)
@@ -139,21 +139,21 @@ def motivation() -> None:
     )
     _box(
         right,
-        (6.8, 3.9),
-        2.6,
+        (6.5, 3.9),
+        3.2,
         1.0,
         "Confined worker\nhost",
         facecolor="#bdbdbd",
         fontsize=6.5,
     )
     _arrow(right, (2.4, 4.4), (3.5, 4.4))
-    _arrow(right, (5.7, 4.4), (6.8, 4.4))
-    _box(right, (5.6, 1.1), 1.9, 0.9, "report/q3\nREAD", edgecolor="#1f5d3a")
-    _box(right, (7.9, 1.1), 1.8, 0.9, "all other\nauthority", edgecolor="#8c1d18")
-    _arrow(right, (7.75, 3.9), (6.55, 2.0), color="#1f5d3a")
-    _arrow(right, (8.45, 3.9), (8.8, 2.0), color="#8c1d18")
-    right.text(6.55, 0.35, "grant", ha="center", color="#1f5d3a", fontsize=7.2)
-    right.text(8.8, 0.35, "DENY", ha="center", color="#8c1d18", fontsize=7.2, fontweight="bold")
+    _arrow(right, (5.7, 4.4), (6.5, 4.4))
+    _box(right, (4.85, 1.1), 2.3, 0.9, "report/q3\nREAD", edgecolor="#1f5d3a", fontsize=6.8)
+    _box(right, (7.55, 1.1), 2.3, 0.9, "all other\nauthority", edgecolor="#8c1d18", fontsize=6.8)
+    _arrow(right, (7.75, 3.9), (6.0, 2.0), color="#1f5d3a")
+    _arrow(right, (8.45, 3.9), (8.7, 2.0), color="#8c1d18")
+    right.text(6.0, 0.35, "grant", ha="center", color="#1f5d3a", fontsize=7.2)
+    right.text(8.7, 0.35, "DENY", ha="center", color="#8c1d18", fontsize=7.2, fontweight="bold")
 
     fig.subplots_adjust(wspace=0.16)
     _save(fig, "motivation.pdf")
@@ -207,7 +207,14 @@ def architecture() -> None:
     _box(ax, (5.9, 1.4), 2.05, 0.8, "Landlock\nobjects", facecolor="white")
     _box(ax, (8.35, 1.4), 2.05, 0.8, "seccomp\nsyscalls", facecolor="white")
     _box(ax, (10.8, 1.4), 2.35, 0.8, "cgroup / rlimit\nresources", facecolor="white")
-    _arrow(ax, (11.95, 6.3), (11.95, 2.9), color="#4a4a4a")
+    # Route the grant connection around the framework band, not through output.
+    ax.plot(
+        [11.95, 11.95, 13.8, 13.8, 11.95],
+        [6.3, 5.7, 5.7, 3.2, 3.2],
+        color="#4a4a4a",
+        linewidth=0.8,
+    )
+    _arrow(ax, (11.95, 3.2), (11.95, 2.9), color="#4a4a4a")
     _arrow(ax, (2.85, 1.8), (3.25, 1.8))
     _arrow(ax, (5.5, 1.8), (5.9, 1.8))
     _arrow(ax, (7.95, 1.8), (8.35, 1.8))
@@ -239,7 +246,7 @@ def overhead() -> None:
         width=0.62,
     )
     ax.set_xticks(np.arange(len(labels)), labels=labels)
-    ax.set_ylabel("Overhead vs. security disabled (%)")
+    ax.set_ylabel("Overhead vs. disabled (%)")
     ax.set_ylim(0, 58)
     ax.set_yticks(np.arange(0, 51, 10))
     ax.grid(axis="y", color="#d0d0d0", linewidth=0.5)
