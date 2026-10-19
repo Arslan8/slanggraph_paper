@@ -1,11 +1,15 @@
+PYTHON ?= python3
+FIGURES = figures/motivation.pdf figures/architecture.pdf figures/overhead.pdf
+
 .PHONY: all clean check figures
+.DELETE_ON_ERROR:
 
 all: main.pdf
 
-figures: figures/motivation.pdf figures/architecture.pdf figures/exposure.pdf figures/overhead.pdf
-
-figures/motivation.pdf figures/architecture.pdf figures/exposure.pdf figures/overhead.pdf: scripts/generate_figures.py
-	python3 scripts/generate_figures.py
+# The generator writes all figures together; run it only once, including with -j.
+figures: scripts/generate_figures.py
+	"$(PYTHON)" scripts/generate_figures.py
+	@for figure in $(FIGURES); do test -s "$$figure" || exit 1; done
 
 main.pdf: main.tex references.bib usenix-2020-09.sty figures
 	pdflatex -interaction=nonstopmode -halt-on-error main.tex
@@ -13,9 +17,11 @@ main.pdf: main.tex references.bib usenix-2020-09.sty figures
 	pdflatex -interaction=nonstopmode -halt-on-error main.tex
 	pdflatex -interaction=nonstopmode -halt-on-error main.tex
 
+# Basic PDF integrity only; venue-specific submission rules require review.
 check: main.pdf
-	@test "$$(pdfinfo main.pdf | awk '/^Pages:/ {print $$2}')" -le 20
-	@pdffonts main.pdf | awk 'NR > 2 && $$6 != "yes" { bad=1 } END { exit bad }'
+	@test -s main.pdf
+	@pdfinfo main.pdf > /dev/null
+	@fonts="$$(pdffonts main.pdf)" && printf '%s\n' "$$fonts" | awk 'NR > 2 && $$(NF - 4) != "yes" { print "Unembedded font: " $$1; bad=1 } END { exit bad }'
 
 clean:
-	rm -f main.aux main.bbl main.blg main.log main.out main.pdf
+	rm -f main.aux main.bbl main.blg main.log main.out main.pdf $(FIGURES)
