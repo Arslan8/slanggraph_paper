@@ -2,9 +2,9 @@
 
 all: main.pdf
 
-figures: figures/expressiveness.pdf figures/exposure.pdf figures/overhead.pdf
+figures: figures/motivation.pdf figures/architecture.pdf figures/exposure.pdf figures/overhead.pdf
 
-figures/expressiveness.pdf figures/exposure.pdf figures/overhead.pdf: scripts/generate_figures.py
+figures/motivation.pdf figures/architecture.pdf figures/exposure.pdf figures/overhead.pdf: scripts/generate_figures.py
 	python3 scripts/generate_figures.py
 
 main.pdf: main.tex references.bib usenix-2020-09.sty figures

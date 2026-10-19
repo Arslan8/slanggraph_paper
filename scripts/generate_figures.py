@@ -7,7 +7,7 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,110 +40,187 @@ def _save(fig: plt.Figure, name: str) -> None:
     plt.close(fig)
 
 
-def expressiveness() -> None:
-    """Plot the qualitative feature matrix from the published designs."""
-    systems = ["Progent", "SEAgent", "CaMeL", "slangGraph"]
-    features = [
-        "Tool\nDAC",
-        "Argument\nrules",
-        "History /\nflow",
-        "Restrictive\nstack",
-        "Monotonic\nnarrowing",
-        "Delegation",
-        "Hostile-tool\nconfinement",
-        "Portable\nadapters",
-        "Activation\nevidence",
-    ]
-    # 0 = absent, 0.5 = narrower/partial model, 1 = provided.
-    values = np.array(
-        [
-            [0, 1, 0.5, 0, 1, 0.5, 0, 0, 0],
-            [0, 1, 1, 0, 0, 1, 0, 0, 0],
-            [0, 1, 1, 0, 0.5, 0, 0, 0, 0],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1],
-        ],
-        dtype=float,
+def _box(
+    ax: plt.Axes,
+    xy: tuple[float, float],
+    width: float,
+    height: float,
+    text: str,
+    *,
+    facecolor: str = "white",
+    edgecolor: str = "#202020",
+    fontsize: float = 7.2,
+    linestyle: str = "-",
+) -> None:
+    """Draw a compact rounded box used by the system diagrams."""
+    patch = FancyBboxPatch(
+        xy,
+        width,
+        height,
+        boxstyle="round,pad=0.025,rounding_size=0.035",
+        facecolor=facecolor,
+        edgecolor=edgecolor,
+        linewidth=0.8,
+        linestyle=linestyle,
+    )
+    ax.add_patch(patch)
+    ax.text(
+        xy[0] + width / 2,
+        xy[1] + height / 2,
+        text,
+        ha="center",
+        va="center",
+        fontsize=fontsize,
+        linespacing=1.15,
     )
 
-    fig, ax = plt.subplots(figsize=(7.0, 2.15))
-    fills = {0.0: "white", 0.5: "#a6a6a6", 1.0: "#202020"}
-    ax.set_xlim(-0.5, len(features) - 0.5)
-    ax.set_ylim(len(systems) - 0.5, -0.5)
-    ax.set_xticks(np.arange(len(features)), labels=features)
-    ax.set_yticks(np.arange(len(systems)), labels=systems)
-    ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False, length=0)
 
-    for row in range(values.shape[0]):
-        for column in range(values.shape[1]):
-            value = values[row, column]
-            ax.add_patch(
-                Rectangle(
-                    (column - 0.5, row - 0.5),
-                    1,
-                    1,
-                    facecolor=fills[value],
-                    edgecolor="black",
-                    linewidth=0.45,
-                )
-            )
-            label = "Y" if value == 1 else "P" if value == 0.5 else "--"
-            color = "white" if value == 1 else "black"
-            ax.text(column, row, label, ha="center", va="center", color=color)
-
-    for spine in ax.spines.values():
-        spine.set_linewidth(0.6)
-
-    legend = [
-        Patch(facecolor="#202020", edgecolor="black", label="Y: provided"),
-        Patch(facecolor="#a6a6a6", edgecolor="black", label="P: narrower model"),
-        Patch(facecolor="white", edgecolor="black", label="--: not provided"),
-    ]
-    ax.legend(handles=legend, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=3)
-    _save(fig, "expressiveness.pdf")
-
-
-def exposure() -> None:
-    """Plot exposed sinks for the E1 static mediation models."""
-    labels = [
-        "None",
-        "Three LangChain wrappers",
-        "Progent",
-        "CaMeL (generous tag model)",
-        "slangGraph policy only",
-        "slangGraph host adapter",
-        "slangGraph composed adapters",
-    ]
-    exposed = [8, 8, 7, 0, 8, 4, 0]
-    projected = [False, False, False, False, False, True, True]
-    y = np.arange(len(labels))
-
-    fig, ax = plt.subplots(figsize=(3.35, 2.65))
-    bars = ax.barh(
-        y,
-        exposed,
-        color=["#303030" if not item else "#bdbdbd" for item in projected],
-        edgecolor="black",
-        linewidth=0.6,
-        hatch=["" if not item else "///" for item in projected],
-        height=0.68,
+def _arrow(
+    ax: plt.Axes,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    *,
+    color: str = "#202020",
+    linestyle: str = "-",
+) -> None:
+    """Draw an arrow used by the system diagrams."""
+    ax.add_patch(
+        FancyArrowPatch(
+            start,
+            end,
+            arrowstyle="-|>",
+            mutation_scale=8,
+            linewidth=0.8,
+            color=color,
+            linestyle=linestyle,
+        )
     )
-    ax.set_yticks(y, labels=labels)
-    ax.invert_yaxis()
-    ax.set_xlim(0, 8.8)
-    ax.set_xticks(range(0, 9, 2))
-    ax.set_xlabel("Exposed implementation sinks (of 8)")
-    ax.grid(axis="x", color="#d0d0d0", linewidth=0.5)
-    ax.set_axisbelow(True)
-    ax.spines[["top", "right"]].set_visible(False)
-    for bar, value in zip(bars, exposed, strict=True):
-        ax.text(max(value, 0) + 0.15, bar.get_y() + bar.get_height() / 2, str(value), va="center")
 
-    legend = [
-        Patch(facecolor="#303030", edgecolor="black", label="Static mediation model"),
-        Patch(facecolor="#bdbdbd", edgecolor="black", hatch="///", label="Adapter projection"),
-    ]
-    ax.legend(handles=legend, loc="lower right", frameon=False)
-    _save(fig, "exposure.pdf")
+
+def motivation() -> None:
+    """Show why authorizing a call is weaker than constraining its effects."""
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.35))
+    for ax in axes:
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 6)
+        ax.axis("off")
+
+    left, right = axes
+    left.set_title("(a) Call-boundary authorization", fontweight="bold", pad=4)
+    _box(left, (0.2, 3.9), 2.2, 1.0, "Call\nread(q3)", facecolor="#f2f2f2")
+    _box(left, (3.5, 3.9), 2.2, 1.0, "Call guard\nALLOW", facecolor="#d9d9d9")
+    _box(
+        left,
+        (6.8, 3.9),
+        2.6,
+        1.0,
+        "Tool\nimplementation",
+        facecolor="#f2f2f2",
+        fontsize=6.6,
+    )
+    _arrow(left, (2.4, 4.4), (3.5, 4.4))
+    _arrow(left, (5.7, 4.4), (6.8, 4.4))
+    _box(left, (5.8, 1.1), 1.9, 0.9, "payroll.csv\nREAD", edgecolor="#8c1d18")
+    _box(left, (8.0, 1.1), 1.8, 0.9, "attacker.net\nSEND", edgecolor="#8c1d18")
+    _arrow(left, (7.75, 3.9), (6.8, 2.0), color="#8c1d18")
+    _arrow(left, (8.45, 3.9), (8.9, 2.0), color="#8c1d18")
+    left.text(7.8, 0.35, "effects occur below the check", ha="center", color="#8c1d18", fontsize=7.2)
+
+    right.set_title("(b) Layered reference monitoring", fontweight="bold", pad=4)
+    _box(right, (0.2, 3.9), 2.2, 1.0, "Call\nread(q3)", facecolor="#f2f2f2")
+    _box(
+        right,
+        (3.5, 3.9),
+        2.2,
+        1.0,
+        "HostRouter\nframework",
+        facecolor="#d9d9d9",
+        fontsize=6.5,
+    )
+    _box(
+        right,
+        (6.8, 3.9),
+        2.6,
+        1.0,
+        "Confined worker\nhost",
+        facecolor="#bdbdbd",
+        fontsize=6.5,
+    )
+    _arrow(right, (2.4, 4.4), (3.5, 4.4))
+    _arrow(right, (5.7, 4.4), (6.8, 4.4))
+    _box(right, (5.6, 1.1), 1.9, 0.9, "report/q3\nREAD", edgecolor="#1f5d3a")
+    _box(right, (7.9, 1.1), 1.8, 0.9, "all other\nauthority", edgecolor="#8c1d18")
+    _arrow(right, (7.75, 3.9), (6.55, 2.0), color="#1f5d3a")
+    _arrow(right, (8.45, 3.9), (8.8, 2.0), color="#8c1d18")
+    right.text(6.55, 0.35, "grant", ha="center", color="#1f5d3a", fontsize=7.2)
+    right.text(8.8, 0.35, "DENY", ha="center", color="#8c1d18", fontsize=7.2, fontweight="bold")
+
+    fig.subplots_adjust(wspace=0.16)
+    _save(fig, "motivation.pdf")
+
+
+def architecture() -> None:
+    """Draw the layered slangGraph reference-monitor architecture."""
+    fig, ax = plt.subplots(figsize=(7.0, 3.05))
+    ax.set_xlim(0, 14)
+    ax.set_ylim(0, 8)
+    ax.axis("off")
+
+    _box(ax, (0.3, 6.3), 2.4, 0.9, "Model / subagent\n(untrusted intent)", facecolor="#f2f2f2")
+    _box(ax, (3.25, 6.3), 3.0, 0.9, "HostRouter\nsingle refusing path", facecolor="#bdbdbd")
+    _box(ax, (7.0, 6.3), 2.6, 0.9, "Policy\nDAC then forbids", facecolor="#e4e4e4")
+    _box(ax, (10.4, 6.3), 3.1, 0.9, "Exact grant\n+ baseline authority", facecolor="#d2d2d2")
+    _arrow(ax, (2.7, 6.75), (3.25, 6.75))
+    _arrow(ax, (6.25, 6.75), (7.0, 6.75))
+    _arrow(ax, (9.6, 6.75), (10.4, 6.75))
+
+    framework_band = FancyBboxPatch(
+        (0.3, 3.9),
+        13.2,
+        1.45,
+        boxstyle="round,pad=0.025,rounding_size=0.035",
+        facecolor="#f7f7f7",
+        edgecolor="#5a5a5a",
+        linewidth=0.8,
+    )
+    ax.add_patch(framework_band)
+    ax.text(0.5, 5.02, "FRAMEWORK OBJECT MANAGER", fontsize=7.2, fontweight="bold", color="#4a4a4a")
+    framework = ["dispatch", "registry", "state/store", "checkpoint", "model input", "output"]
+    for index, label in enumerate(framework):
+        x = 0.5 + index * 2.17
+        _box(ax, (x, 4.15), 1.75, 0.62, label, facecolor="white", fontsize=6.6)
+    _arrow(ax, (4.75, 6.3), (4.75, 5.35), color="#4a4a4a")
+
+    host_band = FancyBboxPatch(
+        (0.3, 1.15),
+        13.2,
+        1.75,
+        boxstyle="round,pad=0.025,rounding_size=0.035",
+        facecolor="#f7f7f7",
+        edgecolor="#5a5a5a",
+        linewidth=0.8,
+    )
+    ax.add_patch(host_band)
+    ax.text(0.5, 2.57, "HOST ENFORCEMENT", fontsize=7.2, fontweight="bold", color="#4a4a4a")
+    _box(ax, (0.5, 1.4), 2.35, 0.8, "Trusted parent\nresolve + lower", facecolor="#e4e4e4")
+    _box(ax, (3.25, 1.4), 2.25, 0.8, "Fresh worker\nrelease barrier", facecolor="#bdbdbd")
+    _box(ax, (5.9, 1.4), 2.05, 0.8, "Landlock\nobjects", facecolor="white")
+    _box(ax, (8.35, 1.4), 2.05, 0.8, "seccomp\nsyscalls", facecolor="white")
+    _box(ax, (10.8, 1.4), 2.35, 0.8, "cgroup / rlimit\nresources", facecolor="white")
+    _arrow(ax, (11.95, 6.3), (11.95, 2.9), color="#4a4a4a")
+    _arrow(ax, (2.85, 1.8), (3.25, 1.8))
+    _arrow(ax, (5.5, 1.8), (5.9, 1.8))
+    _arrow(ax, (7.95, 1.8), (8.35, 1.8))
+    _arrow(ax, (10.4, 1.8), (10.8, 1.8))
+    ax.text(
+        7.0,
+        0.45,
+        "Activation receipt binds principal, request, grant, lowering, worker, and mechanisms before release",
+        ha="center",
+        fontsize=7.2,
+        fontweight="bold",
+    )
+    _save(fig, "architecture.pdf")
 
 
 def overhead() -> None:
@@ -183,8 +260,8 @@ def overhead() -> None:
 def main() -> None:
     """Generate every paper figure from the recorded evaluation values."""
     _configure()
-    expressiveness()
-    exposure()
+    motivation()
+    architecture()
     overhead()
 
 

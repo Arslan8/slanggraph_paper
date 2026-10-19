@@ -12,11 +12,12 @@ make check
 the paper. The plotting source and recorded inputs live in
 `scripts/generate_figures.py`.
 
-The paper is grounded in slangGraph revision
-`c9164220c436be8a2e92cde3db19a2d3fcbadd7e`. Quantitative claims come from the
-versioned evaluation artifact or from commands recorded in
-`SUBMISSION_CHECKLIST.md`. Static capability projections are labeled as such;
-they are not presented as runtime enforcement results.
+The paper's current architecture is grounded in slangGraph revision `53c5d317`
+and the accompanying object-class design work. Quantitative claims retain their
+own recorded implementation revisions; the manuscript does not attribute an
+older bubblewrap measurement to the current Landlock backend. Static capability
+projections and incomplete framework placement are labeled explicitly rather
+than presented as runtime enforcement or whole-system results.
 
 Before submission, create a history-free anonymous artifact snapshot and replace
 the placeholder Open Science URL. Do not put author names or affiliations in

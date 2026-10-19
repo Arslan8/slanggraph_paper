@@ -5,7 +5,6 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{tabularx}
-\usepackage{multirow}
 \usepackage{xspace}
 
 \newcommand{\sys}{\textsc{slangGraph}\xspace}
@@ -13,737 +12,661 @@
 
 \begin{document}
 \date{}
-\title{\Large \bf slangGraph: From Tool Calls to Kernel Boundaries\\
-  Composable, Evidence-Carrying Enforcement for LLM Agents}
+\title{\Large \bf Closing the Effect Gap:\\
+  A Layered Reference Monitor for LLM Agents}
 \author{Anonymous submission}
 \maketitle
 
 \begin{abstract}
-Tool-using language-model agents execute attacker-influenced actions with the
-authority of conventional software. Existing defenses primarily decide whether
-a proposed tool call is acceptable. That boundary is insufficient when wrappers
-can be bypassed, a tool rewrites its arguments, or an admitted implementation
-uses undeclared files, processes, or channels.
+Agent defenses increasingly restrict which tool calls a language model may
+issue. This is necessary but not sufficient. Once a call is approved, its
+implementation may resolve a different file, open an undeclared socket, or
+return sensitive data that later leaves through model context or an output
+callback. We call the difference between an authorized call and its reachable
+effects the \emph{effect gap}.
 
-We present \sys, an LSM-inspired security architecture integrated into
-LangGraph. A constructive, tool-authored discretionary policy proposes concrete
-authority; independently developed mandatory modules may only remove authority.
-The framework converts the result into a platform-neutral grant, expands it into
-exact enforcement obligations, conservatively assigns those obligations to host,
-service, and resource adapters, and releases a worker only after verifying
-worker-bound activation evidence. Its Linux backend executes hostile Python
-tools in fresh bubblewrap workers with explicit mounts, namespaces, seccomp,
-resource limits, bounded data-only results, and termination-aware flow state.
+We present \sys, a layered reference monitor for LangGraph. A single router
+mediates framework objects---including calls, state, checkpoints, model input,
+and output---while a confined worker and the host kernel mediate files, syscalls,
+and resources. Policy produces an exact, platform-neutral grant. The runtime
+releases a worker only after exact-or-tighter lowering and activation evidence
+bind that grant to the worker and enforcing mechanisms. Open object classes
+extend the same contract to application resources without changing the policy
+language.
 
-Across eight vulnerable tools, deterministic canaries show that call-boundary
-defenses can approve calls whose implementations reach unauthorized sinks. The
-accepted Linux contract passes 55 focused kernel and flow tests and the complete
-518-test upstream-compatible suite. Matched microbenchmarks show 13.2\% overhead
-for capability-only mediation and 49.0\% for five modules. \sys does not infer
-user intent or claim automatic noninterference; it makes authorized authority,
-its enforcing components, and activation evidence explicit.
+Eight executable canaries demonstrate the effect gap: call-boundary defenses
+approve policy-conformant calls whose implementations reach unauthorized sinks.
+For the implemented boundary, a source-bound certificate verifies all 21
+catalogued router obligations; an independent verifier passes 15,744 Tool API
+conformance cases; and all 151 focused router, object-manager, and Linux tests
+pass, exercising descriptor-bound Landlock rules, raw syscalls, descendants,
+and activation failures. Policy-only
+mediation adds 13.2\% latency in our recorded microbenchmark. We do not claim
+whole-framework complete mediation: several upstream placement paths remain
+open, and the paper reports them as coverage failures rather than redefining
+them out of scope.
 \end{abstract}
 
 \section{Introduction}
 
-Language-model agents turn text into effects. A model can select a tool, provide
-arguments, consume its result, and continue across retries, checkpoints,
-subagents, and parallel branches. Indirect prompt injection makes the model's
-control decisions attacker-influenced~\cite{greshake2023indirect,agentdojo,
-injecagent}. The security problem is therefore not only whether the model emits
-a syntactically suspicious call. It is whether the resulting computation can
-exercise authority that was not explicitly authorized.
+Suppose a user asks an agent to read \code{reports/q3} and summarize it in a
+finance channel. The model proposes exactly that call. A symbolic policy checks
+the tool name and path, finds both authorized, and allows execution. The
+decision is correct. The system may still be insecure.
 
-Recent systems make major advances at the agent--tool interface. Progent checks
-symbolic rules over tool names and arguments and verifies monotonic policy
-updates~\cite{progent}. SEAgent applies mandatory access control over an
-information-flow graph~\cite{seagent}. CaMeL separates control from untrusted
-data and uses capabilities to protect data flows~\cite{camel}. These systems
-improve policy expressiveness or model-level data-flow integrity. Yet an
-interface decision does not by itself constrain the implementation below the
-interface. A policy may approve \code{read\_file("reports/q3")}, after which a
-hostile implementation resolves a different path, imports a dependency with a
-side effect, opens an ambient socket, or spawns a helper. Likewise, an outer
-middleware guard does not mediate an execution callback that a wrapper invokes
-twice with different arguments.
+The admitted implementation can join the approved relative path against an
+attacker-controlled base, read \code{payroll.csv}, open a socket, and return the
+secret. Even if the tool process cannot transmit directly, the framework may
+write the result into graph state, place it in the next model prompt, or publish
+it through a callback. None of these effects contradicts the decision that the
+\emph{proposed call} was allowed. They occur below or after the point where the
+decision was made.
 
-Operating systems encountered the analogous problem decades ago. Linux Security
-Modules (LSM) separates fixed mediation hooks from the policies loaded behind
-them, preserves discretionary checks, lets multiple mandatory modules restrict
-an operation, and attaches private security state to protected
-objects~\cite{wright2002lsm,linuxlsm}. The analogy is useful, but agents add three
-complications. First, policy must describe semantic resources such as recipients
-and SQL operations, not just kernel objects. Second, enforcement may be split
-among a local sandbox, a service broker, and a resource-side credential issuer.
-Third, a decision is not evidence that those mechanisms were installed for the
-worker that executed the tool.
+This distinction matters because recent agent defenses have made the call
+boundary substantially stronger. Progent expresses symbolic policies over tool
+names and arguments and checks that unapproved policy updates only narrow
+authority~\cite{progent}. SEAgent applies mandatory policy to an agent
+information-flow graph~\cite{seagent}. CaMeL separates trusted control flow from
+untrusted data and uses capabilities to protect data flows~\cite{camel}. These
+systems address important parts of the problem. Our question is complementary:
+\emph{what must the runtime guarantee after it decides to allow a call?}
 
-This paper presents \sys, an LSM-inspired security framework implemented as a
-fork of LangGraph. The design follows a strict separation:
-
-\begin{quote}
-\emph{Authorization determines what should happen. Enforcement adapters bound
-what can happen. Evidence establishes which bounds were active.}
-\end{quote}
-
-The framework does not infer security policy from model behavior. A tool author
-constructively requests authority; the principal's envelope and shares intersect
-that request; mandatory modules can only subtract. The surviving rules form an
-immutable, platform-neutral \emph{grant}. Every rule and the closed-world runtime
-baseline become exact obligations. Adapters must implement each obligation
-exactly or more restrictively, declare their dependencies, and return
-worker-bound activation evidence. An unsupported rule denies instead of being
-approximated by a broad capability class.
-
-Our current reference backend makes this contract operational for mediated local
-Python tools on Linux. It supports regular-file and live directory-subtree access
-plus explicitly named resource ceilings. Network, remote-service, credential,
-delegation, and executable authority are rejected by this backend; the generic
-grant and adapter contracts are designed for additional backends. This is a
-deliberately narrower but stronger claim than process-wide MAC or complete agent
-noninterference.
-
-This work makes four contributions:
-
-\begin{itemize}
-  \item We identify the \emph{authorization--enforcement gap}: expressive
-  call-boundary policies do not constrain hostile implementations or establish
-  that an enforcement mechanism was active.
-  \item We design a composable policy pipeline combining tool-authored DAC,
-  restrictive mandatory modules, exact grants, an obligation DAG, conservative
-  adapter lowering, and activation evidence.
-  \item We implement innermost mediation in LangGraph and a Linux executor that
-  confines each admitted Python tool before importing untrusted code.
-  \item We evaluate mediation exposure, deterministic bypass canaries, Linux
-  contract failures, compatibility, and policy-path overhead. Our results show
-  both where interface defenses are strong and where only active confinement
-  supports the claimed boundary.
-\end{itemize}
-
-\section{Problem and Goals}
-\label{sec:problem}
-
-\subsection{The authorization--enforcement gap}
-
-Let a proposed call be $c=(p,t,a,h)$: authenticated principal $p$, tool $t$,
-arguments $a$, and prior security history $h$. A call-boundary monitor computes
-$D(c)\in\{\mathsf{allow},\mathsf{deny}\}$. For benign tools, $D$ can be an
-effective enforcement point. For hostile tools, however, the actual effect set
-$E(t,a)$ is not necessarily a function of the declared descriptor. The desired
-property is not merely $D(c)=\mathsf{allow}$, but
-
-\begin{equation}
-  E(t,a) \subseteq A(c),
-  \label{eq:subset}
-\end{equation}
-
-where $A(c)$ is the exact authorized authority, including runtime requirements.
-Equation~\ref{eq:subset} cannot be established by trusting $t$'s metadata. It
-requires an enforcement mechanism whose effective authority is a subset of the
-grant and evidence that the mechanism protected this execution.
-
-Three examples expose the distinction. A path policy can approve a relative path
-before the implementation joins it with an attacker-controlled base directory.
-A URL policy can approve HTTPS while the implementation accepts \code{file://}.
-A mail tool can validate the first recipient while its implementation sends a
-larger list. These are not necessarily failures of the policy language: they are
-failures to keep resource resolution and effects below the mediation point.
-
-\subsection{Design goals}
-
-\paragraph{G1: enforcement over inference.}
-Descriptors, model reasoning, and static analysis help construct policy, but are
-not evidence of runtime behavior. The system must bound effects of hostile code.
-
-\paragraph{G2: policy composition without grant paths.}
-Tools propose DAC; operator modules impose mandatory restrictions. No module,
-ordering choice, transform, or delegation may turn a prior denial into authority.
-
-\paragraph{G3: portable policy, replaceable mechanisms.}
-Policies name semantic operations and resources. Linux mounts, Windows handles,
-service tokens, and sandbox bytecode belong in adapter plans, not the grant.
-
-\paragraph{G4: exact negotiation and fail-closed lowering.}
-Advertising ``network'' is insufficient. An adapter must state whether it can
-enforce the concrete protocol, endpoint, method, resource scope, conditions, and
-denial of unlisted authority. Unsupported requests deny.
-
-\paragraph{G5: complete mediation within a declared boundary.}
-Every physical execution through a configured \code{ToolNode} or
-\code{guarded\_tool}, including retries and rewritten calls, must traverse the
-same innermost check. The system must state what lies outside this boundary.
-
-\paragraph{G6: evidence before release.}
-A plan digest records intent, not installation. The coordinator releases
-untrusted code only after trusted setup and independent observations bind the
-actual worker, payload, grant, plan, and obligations.
-
-\paragraph{Non-goals.}
-\sys does not infer user intent, prove that an allowed action is beneficial,
-protect unmediated arbitrary Python nodes, or automatically track all information
-flows through model context and external storage. These properties require
-task-specific authority, mediation of additional sinks, and conservative labels.
-
-\section{Threat Model and Security Contract}
-\label{sec:threat}
-
-The adversary controls model outputs, tool arguments, retrieved data, tool
-implementations, native tool dependencies after confinement, and subagent
-prompts. It may exploit retries, argument rewriting, path races, dependency side
-effects, malformed output, resource exhaustion, and failures during cancellation
-or audit.
-
-The trusted computing base (TCB) contains principal authentication and binding,
-the coordinator, policy modules and backend, normalizers, grant compiler,
-selected adapters, launcher, startup shim, interpreter startup, audit and flow
-stores, and the underlying OS. A policy module affects authorization and is
-therefore explicitly trusted. Tool-authored declarations are untrusted requests,
-not facts.
-
-The implemented Linux contract covers statically configured local Python tools
-mediated by \code{ToolNode} or \code{guarded\_tool} and run in fresh workers.
-It supports regular-file reads, live directory-subtree reads, exact-file
-read/write/truncate, directory-subtree read/write/create/delete/truncate, and
-explicit CPU, address-space, per-file-size, private-tmpfs, descriptor, process,
-and wall-time limits. Filesystem grants describe live paths, not snapshots.
-Special files and subtrees crossing nested host mounts are rejected.
-
-The current backend excludes network and service access, dependency identity,
-RSS and cgroup-memory quotas, aggregate persistent-storage quotas, and executable
-authority. Calls requiring these guarantees deny before tool execution. Ordinary
-graph nodes, model clients, callbacks, renderers, and unwrapped aliases are
-outside the Linux worker boundary. They must be trusted or separately mediated.
-
-We claim the following only for an execution reported \emph{enforced}: the
-framework can identify its exact authorized authority; map every restriction to
-an enforcing component; and provide authenticated, worker-bound evidence that
-all required components were active before untrusted code ran. A degraded run,
-an advisory waiver with unknown effective authority, or uncertain termination
-does not receive this claim.
-
-\section{Architecture}
-\label{sec:architecture}
-
-Figure~\ref{fig:pipeline} shows the path from intent to execution. The central
-object is the grant, not a Linux sandbox profile.
+Figure~\ref{fig:motivation} illustrates the gap. Call authorization constrains a
+structured request. Security ultimately concerns the effects that execute: host
+objects such as files and sockets, and framework objects such as state,
+checkpoints, model context, and output destinations. A complete boundary must
+mediate both kinds. The kernel does not understand a graph channel or Slack
+destination; an agent framework cannot intercept raw \code{open(2)} inside
+hostile code. Neither layer is sufficient alone.
 
 \begin{figure*}[t]
-\centering
-\fbox{\begin{minipage}{0.96\textwidth}
-\centering
-\textbf{authenticated principal + normalized intent + tool profile}
-$\longrightarrow$ constructive DAC candidate
-$\longrightarrow$ restrictive mandatory filtering
-$\longrightarrow$ immutable platform-neutral grant\\[3pt]
-$\longrightarrow$ exact obligation DAG + closed-world baseline
-$\longrightarrow$ host/service/resource adapter negotiation
-$\longrightarrow$ conservative native plans\\[3pt]
-$\longrightarrow$ trusted worker setup
-$\longrightarrow$ activation receipt verification
-$\longrightarrow$ release
-$\longrightarrow$ execution
-$\longrightarrow$ termination evidence
-\end{minipage}}
-\caption{The \sys authorization-to-enforcement pipeline. No plan or capability
-class alone is evidence that enforcement is active.}
-\label{fig:pipeline}
+  \centering
+  \includegraphics[width=\textwidth]{figures/motivation.pdf}
+  \caption{The effect gap. An exact call-boundary decision does not constrain
+  effects inside the admitted implementation (left). \sys composes framework
+  mediation with host confinement so the worker receives only the authority in
+  the grant (right).}
+  \label{fig:motivation}
 \end{figure*}
 
-\subsection{Constructive DAC and restrictive MAC}
+We present \sys, a layered reference monitor integrated into LangGraph. The
+design follows the operating-system pattern of composing kernel mediation with
+user-space object managers for resources the kernel does not own. SELinux-aware
+X, D-Bus, and PostgreSQL use this structure~\cite{selinuxnotebook,sepgsql};
+\sys applies it to agent runtimes. LangGraph becomes the object manager for
+framework-owned resources, and the host kernel remains the monitor for OS
+resources.
 
-Each tool profile names an owner, callers, exact resource templates, syscall
-profile, and \code{need}/\code{want} requirements. The principal has a typed
-authority envelope; explicit shares may add resources delegated by another
-owner. For normalized intent $i$, the DAC candidate is
+Three principles organize the system. First, all framework operations enter one
+refusing dispatch path, \code{HostRouter}. Second, policy names semantic
+authority rather than Linux mechanisms: author-owned discretionary policy
+constructs a finite candidate, and mandatory policy may only remove authority.
+Third, a decision or plan is not proof of enforcement. A worker is released only
+after activation evidence binds the exact grant, its lowering, the worker, and
+the mechanisms that are active.
+
+This paper makes three contributions:
+
+\begin{itemize}
+  \item We identify and experimentally demonstrate the \emph{effect gap} between
+  authorizing a tool call and bounding the effects of its implementation and
+  subsequent framework data paths.
+  \item We design a layered reference monitor that composes one framework object
+  manager with exact host confinement, restrict-only policy composition, open
+  semantic object classes, and evidence-gated execution.
+  \item We implement the design in LangGraph and evaluate its current boundary
+  using executable canaries, a source-bound router certificate, exhaustive Tool
+  API conformance, Linux integration tests, and policy-path benchmarks. We also
+  publish the paths that remain outside the complete-mediation claim.
+\end{itemize}
+
+\section{The Effect Gap}
+\label{sec:gap}
+
+\subsection{Calls are requests, not effects}
+
+Let a proposed call be $c=(p,t,a,h)$: principal $p$, tool $t$, arguments $a$,
+and security history $h$. A call monitor computes an authorization decision
+$D(c)$. Let $G(c)$ denote the authority intended by an allow decision, and let
+$E(t,a)$ be the effects reachable from executing the implementation and
+publishing its result. The desired property is
 
 \begin{equation}
- C(i)=P_t(i)\cap E_p\cap S_p,
+  E(t,a) \subseteq G(c).
+  \label{eq:effect}
 \end{equation}
 
-where $P_t$ is the tool's requested profile, $E_p$ the principal envelope, and
-$S_p$ applicable shares. Undeclared tools receive no caller or resource
-authority. A missing \code{need} descendant denies; an unavailable \code{want}
-is removed rather than replaced with ambient access.
+Evaluating $D(c)$ establishes that $c$ is admitted; it does not establish
+Equation~\ref{eq:effect}. Tool metadata cannot prove how a hostile
+implementation resolves names, which dependencies run at import time, or which
+ambient descriptors it inherits. Likewise, a host sandbox does not know whether
+a result may enter a model prompt or cross a destination's clearance.
 
-Mandatory modules receive typed requests and may emit attributed, bounded
-forbid constraints or deny a call. The framework owns attribution, validates
-entity references and complexity, and treats diagnostics as denial. It applies
-each constraint to concrete grant lines and also evaluates forbidden
-combinations over the whole candidate. This supports policies such as ``no
-sensitive reads together with outbound communication,'' which cannot be checked
-by evaluating each line independently. The current implementation ships a typed
-reference backend. Cedar is a replaceable authorization backend because Cedar's
-principal--action--resource--context model and forbid semantics suit this
-stage~\cite{cedar}; Cedar syntax is not part of the grant or adapter API.
+The gap appears in ordinary software patterns:
 
-Only a trusted prepare hook may transform arguments. The framework renormalizes
-the output, reruns DAC, and requires semantic authority to be unchanged or
-narrower. String length or structural similarity is not used as an authority
-ordering. Delegation similarly copies private module state and restricts scopes;
-the exact-grant path compares typed authority.
+\begin{itemize}
+  \item A policy approves a relative path before the implementation resolves it
+  against an attacker-controlled directory.
+  \item A URL rule approves HTTPS while the implementation accepts a different
+  scheme or follows a redirect through an ambient client.
+  \item A mail rule validates one recipient while the implementation expands a
+  list or uses a broader credential.
+  \item A read-confined call returns a secret to state; a later send-confined
+  call transmits it. Each call is locally valid, but their composition is not.
+\end{itemize}
 
-\subsection{Platform-neutral grant}
+The first three require enforcement below the implementation interface. The
+fourth requires mediation of framework state and publication across calls.
 
-The immutable grant binds the authenticated principal, exact tool artifact,
-normalized intent, call identity, policy version, and rules. A rule contains a
-typed action, semantic resource selector, conditions, source-line provenance,
-and requirement identity. Runtime dependencies---interpreter roots, environment
-values, descriptors, and protocol channels---are operator-owned baseline rules,
-not authority an adapter may add for itself.
+\subsection{Reference-monitor requirements}
 
-The grant is a closed-world allowlist. Every authority domain owned by an adapter
-requires a \emph{deny-complement} obligation: access not named in the grant or
-approved baseline must be unavailable. Thus ``allow this directory'' while
-leaving the rest of the host filesystem ambient is unsupported, not partial
-success.
+We adapt the classic reference-monitor requirements to an agent runtime. The
+boundary must provide:
 
-\subsection{Obligations and adapter composition}
+\paragraph{Complete mediation.}
+Every operation on an in-scope object must cross a refusing path. Scope cannot
+depend on whether the default policy happens to allow an operation.
 
-The compiler expands each rule into one or more independently verifiable
-obligations. For example, recipient-restricted mail can require (1) a service
-adapter that validates recipients for every send, (2) a host adapter that denies
-alternate network egress, and (3) a resource adapter that withholds broader
-credentials. Exactly one primary adapter owns each obligation, not necessarily
-the entire semantic rule. Dependencies form an acyclic graph.
+\paragraph{Tamper resistance.}
+Untrusted tools and nodes cannot modify the router, policy, grant, audit state,
+or another tool's execution authority. They do not execute in the coordinator.
 
-An adapter assesses each exact obligation as \emph{exact}, \emph{stricter}, or
-\emph{unsupported}. Resource classes are discovery hints only. Lowering is
-accepted only if the adapter's represented authority is a subset of the
-obligation. The coordinator rejects missing dependencies, competing owners,
-stale host evidence, requirement loss, or widening. This interface permits a
-Windows host adapter, a WASI runtime, or a microVM to consume the same grant as
-the Linux backend.
+\paragraph{Verifiable enforcement.}
+The system records not only the authorization decision, but also how every grant
+line was enforced and whether those mechanisms were active for this worker.
 
-\subsection{Activation evidence}
+\paragraph{Monotonic authority.}
+Preparation, delegation, policy modules, and lowering may preserve or reduce
+authority; they may not silently widen it. An unsupported rule denies unless an
+operator explicitly accepts a degraded, non-confining execution.
 
-The coordinator creates a nonce and execution context binding boot identity,
-worker PID and start time, namespaces, credentials, cgroup placement, adapter
-binary, tool artifact, grant, plan, and obligations. Each adapter activates its
-plan and returns signed evidence. The coordinator validates identity, freshness,
-coverage, and the adapter's trust anchor. Only a complete receipt opens the
-release barrier.
+\subsection{Threat model}
 
-This is deliberately stronger than hashing a host model or native plan. A hash
-can establish equality with intended bytes; it cannot establish that a filter is
-installed on the process about to run. The local Linux attestor is rooted in a
-process-local key and trusted supervisor. It is not TPM-backed remote
-attestation.
+The adversary controls model outputs, retrieved data, tool arguments, untrusted
+tool and node code, dependencies loaded after confinement, and subagent prompts.
+It may exploit retries, argument rewriting, path races, import side effects,
+malformed results, resource exhaustion, cancellation, and stale checkpoints.
 
-\subsection{Innermost mediation}
+The framework TCB contains authentication, the coordinator and router, policy
+backend, modules, canonicalizers, grant compiler, framework adapters, audit and
+flow stores, and operator-promoted trusted nodes. The host TCB contains the
+kernel, launcher, enforcement adapter, and supervisor. Kernel compromise, side
+channels, denial of service, the model-provider channel, and trusted-node reads
+are outside the claim. Task intent is also separate: exact authority does not
+prove that an allowed action is beneficial.
 
-LangGraph wrappers receive an \code{execute} continuation and may invoke it more
-than once with modified requests. Running security once around the wrapper chain
-would therefore miss retries. \sys places the decisive check at the top of the
-sync and async physical execution paths, immediately before argument injection
-and \code{BaseTool} dispatch. Each continuation call gets a new index, decision,
-grant, and audit trail. \code{guarded\_tool} uses the same implementation for
-tools called outside a \code{ToolNode}; delegation explicitly propagates a
-narrowed security configuration. A secured node rejects replacement by a weaker
-runtime configuration.
+\section{Design Overview}
+\label{sec:overview}
 
-\subsection{Persistent session-flow scheduling}
+Figure~\ref{fig:architecture} shows the two-layer design. A framework operation
+enters \code{HostRouter} with an authenticated principal and immutable request.
+Policy constructs an exact grant. Framework effects remain inside the object
+manager; host effects are lowered by a trusted parent into a fresh worker's
+Landlock, seccomp, and resource-control configuration. Execution begins only
+after an activation receipt passes verification.
 
-Per-call confinement does not prevent a read-confined call from returning a
-secret that a later send-confined call transmits. \sys therefore offers an
-independent coarse information-flow scheduler. Operators assign each reachable
-operation a conservative possible-read label $L_r$ and optional sink ceiling
-$L_s$. Before parallel fan-out, the framework atomically joins all proposed
-source labels into durable session state. A sink is admitted only when the joined
-label is below its ceiling. Source-and-sink calls join before checking themselves.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/architecture.pdf}
+  \caption{\sys architecture. Framework and host objects have different
+  enforcers but share one authorization and evidence chain. The protected
+  operation inventory is fixed independently of current placement success.}
+  \label{fig:architecture}
+\end{figure*}
 
-Reservations cover the physical call, post hooks, outcome audit, and supervised
-worker lifetime. Uncertain termination retains a durable reservation and kernel
-recovery identity across restart. Session transfer joins the source label into
-the destination before exposing data. The scheduler is sound only when labels
-bound every actual read and every outward channel is mediated or confined. It is
-not automatic end-to-end taint tracking.
+\subsection{One scope rule}
 
-\section{Linux Reference Enforcement}
+An operation is in scope if and only if a hook on the single dispatch path can
+refuse it. This rule avoids two tempting but unsound shortcuts. First, a
+permissive default does not remove an object from the security model. Second,
+adding an adapter or a passing example does not establish that every upstream
+path uses it. Missing placement remains a coverage failure.
+
+\sys defines ten object classes, summarized in Table~\ref{tab:objects}. The
+kernel owns HostResource. LangGraph owns the other nine. \code{ToolNode} and
+\code{guarded\_tool} are callers into \code{HostRouter}, not separate security
+boundaries.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+Class & Refusing operations \\
+\midrule
+Principal & bind, transfer, attenuate \\
+ToolCall & prepare, invoke, post \\
+Dispatch & subgraph, branch, subagent, nested agent \\
+ToolRegistry & register, override \\
+State & write, restore, tool/model/store read \\
+Approval & resume and full reauthorization \\
+FrameworkOp & explicitly guarded operation \\
+ModelInvocation & prompt assembly \\
+Output & emit to destination \\
+HostResource & file, socket, exec, syscall, limits \\
+\bottomrule
+\end{tabularx}
+\caption{Protected object classes. Scope is defined by refusing operations, not
+by shipped policy defaults.}
+\label{tab:objects}
+\end{table}
+
+\subsection{Authorization, enforcement, evidence}
+
+The design separates three questions that are often collapsed:
+
+\begin{enumerate}
+  \item \emph{Authorization:} what exact authority should this operation have?
+  \item \emph{Enforcement:} which components make all other authority
+  unavailable?
+  \item \emph{Evidence:} what establishes that those components protected this
+  execution?
+\end{enumerate}
+
+A policy decision answers only the first. An adapter capability name answers
+neither the second nor the third. \sys carries an immutable grant through all
+three stages and binds their outputs by digest and execution identity.
+
+\section{Framework Object Manager}
+\label{sec:objects}
+
+\subsection{Single-path dispatch}
+
+\code{HostRouter} is the only interface that may enter protected execution
+authority. Sync and async APIs share the same contracts. Every physical retry
+receives a fresh request and decision; this matters because LangGraph wrappers
+may call their \code{execute} continuation repeatedly with changed arguments.
+Mediation outside that continuation would authorize one request and execute
+another.
+
+Child dispatch always runs credential-transfer policy and an explicit subset
+check, including same-principal branches. The audit therefore records identity
+transfers instead of treating them as invisible no-ops. A worker may request a
+nested tool only over an authenticated channel bound by the host; caller-supplied
+tool names and principal fields do not establish origin.
+
+\subsection{State, checkpoints, model input, and output}
+
+Per-call confinement alone cannot prevent cross-call exfiltration. The object
+manager therefore mediates the paths that carry data between calls:
+
+\paragraph{State and store.}
+Keys have owners and labels. Tools receive only declared state channels and a
+mediated store interface. State writes and reads are separate operations so
+mandatory policy can constrain both provenance and use.
+
+\paragraph{Checkpoints.}
+Restore verifies a keyed hash chain, predecessor, monotone sequence, and
+principal binding. A valid serialized shape is not sufficient: replay and
+cross-principal substitution are rejected.
+
+\paragraph{Model invocation.}
+Policy runs before prompt assembly and may deny or strip labeled values. This is
+the last framework boundary before data reaches the model-provider channel.
+
+\paragraph{Output.}
+Policy sees content labels, destination clearance, and the proposed effect. Its
+verdict is allow, deny, redact, or escalate. Tool post-processing and output
+mediation are distinct; a safe return value may still target an unsafe
+destination.
+
+\subsection{Cross-call flow scheduling}
+
+Operators may configure a coarse session label in addition to per-operation
+authorization. Each possible read has a conservative source label; each outward
+effect may have a sink ceiling. Before parallel fan-out, source labels join into
+durable session state. A sink proceeds only when the accumulated label is below
+its ceiling. Reservations span execution, post hooks, audit, and confirmed
+worker termination, preventing a sink from racing a concurrent source.
+
+This is intentionally not automatic taint tracking. Its guarantee depends on
+complete labels and mediation of every outward channel. Unknown effective
+authority cannot be assigned a convenient public label.
+
+\subsection{Certifying router placement}
+
+The router certificate is a bounded, path-sensitive authorization-state
+analysis over Python ASTs. It tracks a successful decision's permission class,
+principal identity, request identity, and single-use dispatch obligation.
+Changed objects, repeated dispatch, unknown calls, unsupported statements, and
+path-budget exhaustion remain unresolved. Reviewed helper contracts are
+source-hash bound so implementation drift invalidates dependent obligations.
+
+This analysis does not prove Python semantics or policy correctness. It provides
+reviewable evidence for a finite router boundary. The protected-operation
+inventory is maintained separately, ensuring that a missing path cannot
+disappear merely because the checker did not certify it.
+
+\section{From Policy to Enforced Grant}
+\label{sec:grant}
+
+\subsection{Constructive DAC, restrictive MAC}
+
+A tool profile proposes finite authority. The tool owner and invoking principal
+must both permit each candidate line; explicit shares may contribute delegated
+authority. Undeclared tools receive no resource or caller authority. A required
+\code{need} line that does not survive denies the operation; an optional
+\code{want} line is removed.
+
+Mandatory modules run after discretionary construction and may emit only
+forbids, labels, or a restrictive verdict. They cannot introduce a permit or
+mutate the candidate. The default Cedar backend creates one ephemeral permit per
+surviving discretionary line, then evaluates operator-owned forbids. Any schema,
+validation, evaluation, or diagnostic failure denies~\cite{cedar}.
+
+Preparation is a separate trusted operation. Its output is normalized and
+reauthorized; a resource-changing transform must prove semantic attenuation over
+typed actions and selectors. String length, structural similarity, and module
+trust are not authority orderings.
+
+\subsection{Open semantic object classes}
+
+Agent applications manipulate resources a framework cannot enumerate in
+advance: database tables, secrets, queues, browser origins, cloud objects, and
+service recipients. A \code{class} declaration names an operation vocabulary,
+object kind, trusted canonicalizer, policy-visible attributes, enforcement
+locus, and lowering adapter. Tool profiles then request concrete \code{need} or
+\code{want} lines over that class.
+
+The registry derives typed Cedar actions and entities from the declaration.
+Canonicalizers may emit only declared attributes. Every class must name a
+kernel, broker, resource-side, or framework enforcer. This keeps the grammar
+open without making enforcement optional.
+
+\subsection{Exact grants and conservative lowering}
+
+The immutable grant binds the principal, request, tool artifact, policy version,
+rules, and operator-owned runtime baseline. A rule contains an action, semantic
+selector, conditions, requirement identity, and provenance. The baseline makes
+interpreter roots, tool packages, descriptors, environment, and protocol
+channels visible authority rather than adapter entitlements.
+
+Every grant line lowers as \emph{exact}, \emph{tightened}, or
+\emph{unsupported}. Exact preserves the represented authority; tightened
+implements a subset; unsupported denies. An operator may explicitly waive a
+class, but the waiver is bound into the grant and yields a degraded receipt with
+no confinement claim. The adapter may never approximate an endpoint rule with
+``network allowed'' or add a runtime dependency after policy.
+
+\subsection{Activation receipts}
+
+The coordinator creates a nonce and execution context. Before release, each
+enforcer returns evidence covering its exact obligations. The receipt binds the
+principal, request, artifact, grant, lowering result, worker identity,
+mechanisms, host capabilities, and expiry. Missing, duplicate, additional,
+stale, or digest-mismatched evidence fails verification.
+
+A plan hash proves agreement about bytes. It does not prove that a filter was
+installed on the process about to execute. The release barrier is the point
+where intended authority becomes an enforced execution.
+
+\section{Linux Enforcement}
 \label{sec:linux}
 
-The Linux backend executes exactly one JSON-serializable request in a fresh
-bubblewrap worker. Bubblewrap provides unprivileged namespace and mount setup;
-seccomp constrains syscalls~\cite{bubblewrap}. We use it as one implementation of
-the generic contract, not as policy vocabulary.
+The Linux backend uses Landlock as its primary filesystem mechanism, seccomp for
+syscall classes, cgroup v2 or rlimits for resources, and a supervisor for
+lifetime. It requires no user namespace. This choice avoids making confinement
+depend on unprivileged namespace settings that distributions increasingly
+restrict~\cite{landlock,seccomp}.
 
-\subsection{Setup before untrusted code}
+\subsection{Confinement before import}
 
-The operator manifest names a canonical source path, import entry point, and
-SHA-256 digest. The trusted parent rechecks and privately copies those source
-bytes. It launches Python with \code{-I -S -B}; runtime roots are absent from the
-startup path. Bubblewrap creates fresh user, mount, PID, IPC, UTS, cgroup, and
-network namespaces; clears the environment; drops capabilities; constructs only
-explicit mounts; and installs a private bounded \code{/tmp}.
+A single-threaded trusted template starts without untrusted imports. For each
+call, the parent resolves grant paths with \code{openat2} using
+\code{RESOLVE\_BENEATH} and \code{RESOLVE\_NO\_MAGICLINKS}, constructs the
+complete Landlock ruleset, optionally creates a fresh cgroup, and forks a worker.
+The worker closes every non-protocol descriptor, sets \code{NoNewPrivs}, calls
+\code{restrict\_self} on the one ruleset descriptor, installs seccomp and
+limits, and only then imports the target. It never receives path descriptors or
+root router authority.
 
-The trusted startup shim applies rlimits and a default-deny seccomp allowlist
-before reporting ready. Only after the parent verifies activation and sends
-\code{GO} does the shim add read-only runtime roots, compile the pinned primary
-source directly, import dependencies, and invoke the function. Dependencies may
-be hostile, but execute after confinement. The artifact identity claim covers
-the primary source, not all dependencies.
+The runtime baseline includes the interpreter, standard library, tool packages,
+\code{/dev/urandom}, temporary storage, and protocol channels. These appear in
+the grant and evidence. A missing baseline denies; the adapter cannot repair it
+with ambient mounts or inherited descriptors.
 
-\subsection{Filesystem semantics}
+\subsection{Kernel semantics}
 
-Canonical selectors must resolve to regular files or directories. The parent
-opens the selected object by descriptor and revalidates device, inode, and type
-when constructing the mount. Parent mounts precede children. Special files,
-unrepresentable exclusions, and directory subtrees containing nested host mounts
-are rejected.
+Filesystem rules bind resolved kernel objects and access masks. The parent, not
+the worker, constructs all rules. Create authority binds the resolved parent.
+Tests exercise a granted file, a second file, direct raw \code{open(2)}, a
+grandchild process, and \code{openat2} magic-link resolution.
 
-The current operation sets match what mount mode plus seccomp can establish. An
-exact writable file requires read, write, and truncate. A writable directory
-requires read, write, create, delete, and truncate. Rename, link, symlink,
-metadata mutation, xattrs, mount operations, process creation, sockets, exec, and
-unrestricted \code{ioctl} are absent from the syscall allowlist. A request for a
-narrower unrepresentable mutation set denies rather than receiving a writable
-mount.
+Landlock network rules name ports, not endpoints. The phase-one seccomp profile
+tightens network authority to no new \code{socket} or \code{connect}; endpoint
+and name policy require a broker. Target-specific \code{EXECUTE} can be lowered
+with Landlock, but phase one similarly tightens execution to none. Seccomp
+returns \code{EPERM} for ordinary socket operations and kills the worker for
+\code{ptrace}, process-VM reads, BPF, and namespace creation.
 
-Directory descriptors pin the root identity, not descendant contents. Grants
-use live-subtree semantics: external mutation is visible. Independently named
-hard-link and bind-mount aliases are separate policy resources. Snapshot or
-content-integrity semantics require a different adapter.
-
-\subsection{Activation, results, and lifetime}
-
-After setup, the shim echoes a parent challenge and plan digest. The parent reads
-kernel state for the actual payload process: namespace identities, capability
-sets, \code{NoNewPrivs}, seccomp mode, thread count, mount table, credentials,
-cgroup, boot ID, PID, and start time. These observations and the trusted shim's
-one-way setup state are bound into the receipt before \code{GO}.
-
-Both protocol directions are capped at 1~MiB before JSON decoding. Responses are
-restricted to built-in JSON shapes with depth 64 and at most 100,000 nodes.
-Stdout is not an activation channel; post-release frames cannot become setup or
-termination evidence. Malformed or excessive output causes failure without
-executing data in the parent.
-
-The supervisor returns success only after waiting for the worker and confirming
-that its PID/start-time identity disappeared. Wall timeout kills the worker;
-async cancellation shields and joins the supervisor thread. If termination
-cannot be established, the outcome is \code{INDETERMINATE}, and active flow
-reservations persist until a recovery operation obtains kernel evidence.
-
-Resource names match their mechanisms: \code{cpu\_ms} uses whole-second
-\code{RLIMIT\_CPU}; \code{address\_space\_bytes} uses \code{RLIMIT\_AS};
-\code{file\_size\_bytes} is per-file \code{RLIMIT\_FSIZE}; \code{nofile} uses
-\code{RLIMIT\_NOFILE}; \code{tmpfs\_bytes} bounds aggregate private temporary
-storage; \code{pids=1} follows from the no-process syscall profile; and
-\code{wall\_ms} is a supervisor deadline followed by confirmed termination.
-The backend rejects RSS and aggregate persistent-storage claims.
+Delegated cgroup v2 controllers provide CPU, memory, PID limits, and
+\code{cgroup.kill} descendant teardown. Without delegation, the receipt records
+the representable rlimit and pidfd fallback. It never relabels an unavailable
+physical-memory guarantee as exact. A supervisor owns wall time. If cancellation
+cannot establish whether an irreversible effect committed or the worker died,
+the outcome is \code{INDETERMINATE} and flow reservations remain durable.
 
 \section{Security Argument}
 \label{sec:argument}
 
-\paragraph{DAC denial is final.}
-The framework evaluates constructive DAC before mandatory hooks. A denial returns
-without invoking a module. Mandatory modules produce only forbids or restrictive
-decisions, so neither module order nor an ``allow'' response creates authority.
+We state the claim for an operation whose framework route is certified and whose
+host receipt verifies. It is conditional on the TCB and mechanism semantics in
+Section~\ref{sec:gap}.
 
-\paragraph{Transforms cannot widen authority.}
-Prepare hooks feed their output through normalization and DAC again. Resource
-changes require typed semantic attenuation. The requirement ledger links each
-surviving rule to its originating \code{need} or \code{want}; removal of the last
-\code{need} descendant denies at policy, lowering, and activation checks.
+\paragraph{No policy grant path.}
+Owner and principal/share policy construct candidate lines. Mandatory policy is
+forbid-only. Preparation and delegation require semantic subset checks. Thus no
+module ordering, transform, or child dispatch can convert prior denial into
+authority.
 
-\paragraph{Enforcement is closed-world.}
-For every adapter-owned domain, a plan must cover both positive rule obligations
-and the deny complement. Baseline authority is explicit and policy-filtered.
-Therefore a successful negotiation cannot silently retain ambient authority in
-an owned domain.
+\paragraph{No silent lowering expansion.}
+Every semantic rule and baseline line has exactly one enforcement disposition.
+Exact and tightened lowerings represent subsets of the grant. Unsupported lines
+deny or produce an explicitly degraded, non-confining receipt. Therefore a
+verified enforced receipt cannot silently retain broader authority in an owned
+domain.
 
-\paragraph{Plans do not self-attest.}
-Activation requires fresh evidence bound to the actual execution context, and
-the release barrier remains closed on any mismatch or setup exception. Worker
-output is not accepted as evidence.
+\paragraph{Worker authority is bound before execution.}
+Untrusted imports occur only after descriptor cleanup, Landlock restriction,
+seccomp, and resource controls. Receipt verification precedes the release
+barrier and binds the observed worker to the request and grant. Worker output is
+not accepted as setup evidence.
 
-\paragraph{Failure does not erase flow state.}
-Possible-read labels join before execution and never decrease on exception.
-Reservations are released only after confirmed termination; uncertain workers
-remain visible in durable recovery state.
+\paragraph{Framework effects remain mediated.}
+For a certified router path, dispatch consumes authorization for the same
+principal and immutable request. State, model, and output effects require their
+own operations; authorization for tool invocation does not authorize them.
 
-\paragraph{What this does not prove.}
-The framework cannot establish user purpose from a principal envelope. It also
-cannot prevent information copied through unmediated graph state or a trusted
-callback. A compromised model can choose a harmful operation that lies entirely
-inside a valid task grant. Consequential actions therefore need task-specific
-authority bound to concrete normalized parameters and expiry. These are
-composition requirements, not properties we hide behind a sandbox claim.
+Together these properties establish Equation~\ref{eq:effect} for the certified
+framework routes and supported host authority domains. They do not establish it
+for an unplaced upstream path. That distinction is central: component evidence
+is not promoted into a whole-system theorem.
 
 \section{Evaluation}
 \label{sec:evaluation}
 
-We ask four questions: (Q1) what security dimensions does \sys compose that
-prior agent defenses treat separately? (Q2) which effects remain below
-call-boundary mediation? (Q3) does the Linux path satisfy its frozen contract
-under failures? and (Q4) what does framework-level policy mediation cost?
+We ask three questions:
 
-\subsection{Methodology}
+\begin{itemize}
+  \item \textbf{RQ1:} Does the effect gap arise in executable agent tools?
+  \item \textbf{RQ2:} What portion of the layered boundary has concrete
+  implementation evidence, and what remains open?
+  \item \textbf{RQ3:} What is the cost of framework policy mediation?
+\end{itemize}
 
-The evaluated implementation is LangGraph 1.2.12 with \sys revision
-\code{c9164220}; the Linux acceptance changes are revision \code{96ef1df9}.
-Validation used Ubuntu 24.04.5, Linux 6.17.0-1032-oem x86-64, Python 3.12.3,
-bubblewrap 0.9.0, libseccomp 2.5.5, and glibc 2.39. Third-party repositories and
-Python artifacts are pinned by commit or package hash.
+The implementation is based on LangGraph 1.2.12. The layered architecture is
+revision \code{53c5d317}; each recorded experiment retains its own revision,
+hardware, and dependency identities. We separate dynamic canaries, bounded
+source certificates, API conformance, kernel integration, and projections. No
+projection is reported as runtime blocking evidence.
 
-Our evaluation separates three evidence types. A \emph{static census} identifies
-reachable sinks and projects the same report through explicit mediation models;
-it is an upper bound and not runtime blocking evidence. \emph{Canaries} execute
-deliberately vulnerable local tools in temporary directories and loopback-only
-services; they are a lower bound. \emph{Linux integration tests} exercise actual
-kernel mechanisms and lifecycle failures. All model-generated seed calls were
-created once by local Qwen3-8B at temperature zero and then replayed. No
-third-party deployment was attacked.
+\subsection{RQ1: Executable effect-gap canaries}
 
-\subsection{Q1: expressiveness and completeness}
+We built eight deliberately vulnerable tools: file read, file write, shell,
+SQL, fetch, email, Slack, and delegation. Each receives a policy-conformant call
+but resolves or expands authority below the checked interface. Calls were
+generated once by local Qwen3-8B at temperature zero and replayed identically.
+Experiments use temporary directories, synthetic records, and loopback services;
+no third-party deployment is attacked.
 
-Figure~\ref{fig:features} compares security mechanisms, not benchmark utility.
-Progent provides particularly expressive argument rules and verified monotonic
-policy updates. SEAgent adds history-sensitive mandatory policy. CaMeL provides
-strong control/data-flow separation and capabilities. \sys borrows these
-directions but addresses a different composition point: it combines tool-owned
-DAC, multiple independently authored restrictive modules, exact enforcement
-obligations, replaceable platform adapters, and activation evidence.
+All eight unauthorized sinks were reached with no defense and after Progent
+approved the policy-conformant calls. The same eight were reached behind each of
+three tested generic LangChain wrappers (Eydii, Forge, and Nuggets). This result
+does not show that their call policies are incorrect. It demonstrates precisely
+the distinction in Equation~\ref{eq:effect}: approving the request does not
+confine its implementation.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{figures/expressiveness.pdf}
-\caption{Qualitative comparison from the systems' published designs.
-``Confine'' means enforcement below an admitted implementation, not rejection
-of a proposed call. ``Narrow'' includes monotonic policy updates or semantic
-argument attenuation in the system's stated model. No prior system is claimed
-inferior in its own target model; the novelty is the joint column set.}
-\label{fig:features}
-\end{figure*}
+CaMeL addresses a stronger data-flow model. Under a generous assumption that all
+relevant values remain untrusted-tagged, our static model marks all eight paths
+covered. We separately reproduced one narrower post-validation case in which a
+value trusted at the policy boundary became an absolute path during resolution.
+That 1/1 result is not a general bypass claim against CaMeL.
 
-To our knowledge, no prior agent-security framework jointly provides all nine
-properties. This is our expressiveness claim: it concerns the range and
-composition of enforceable authority, not automated policy inference. The
-current Linux backend realizes only the filesystem/resource subset of the
-portable adapter model; service adapters remain necessary for useful mail, SQL,
-or remote-network grants.
+\subsection{RQ2: Evidence and open coverage}
 
-\subsection{Q2: sinks below the call boundary}
-
-We built eight intentionally vulnerable tools: file read/write, shell, SQL,
-fetch, email, Slack, and delegation. Each contains one security-sensitive sink.
-The analyzer traces arguments and ambient values through resource resolution,
-post-validation transformations, native calls, and service operations. We score
-each defense generously: a sink counts mediated whenever a sound argument
-constraint could dominate every tainted path, even if the released policy omits
-that constraint.
-
-Figure~\ref{fig:exposure} reports exposed sinks. Policy-only \sys is intentionally
-8/8: an authorization decision is not mislabeled as confinement. Progent
-mediates the explicit delegation boundary but leaves seven implementation sinks
-below its check. CaMeL's data-flow model covers the eight headline paths under
-our generous untrusted-tag assumption; Section~\ref{sec:limitations} explains
-why this is not a claim that CaMeL is bypassed generally. The projected \sys host
-model covers local file/process effects but not semantic services; a composed
-host+service+resource model covers all eight. The projected rows motivated the
-adapter design and are not dynamic evidence.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/exposure.pdf}
-\caption{Static E1 exposure. Projected adapter rows model capability and host
-availability; they are not runtime blocking results.}
-\label{fig:exposure}
-\end{figure}
-
-The deterministic E2 canaries then ask a narrower runtime question: can a
-policy-conformant call reach an unauthorized implementation sink? All eight
-canaries landed with no defense and after Progent approved the calls. The same
-8/8 landed behind each tested generic LangChain wrapper (Eydii, Forge, and
-Nuggets). A scoped CaMeL auxiliary case also landed when a value trusted at the
-policy boundary became an absolute path during post-validation resolution
-(1/1); this case is not comparable to CaMeL's ordinary untrusted-tag threat
-model. These results establish the existence of below-boundary effects, not an
-attack-success-rate comparison among complete systems.
-
-\subsection{Q3: Linux contract and failure behavior}
-
-The Linux milestone froze eight requirements before validation. Table
-\ref{tab:acceptance} summarizes the mechanism and focused failures. The complete
-unmodified \code{langgraph-prebuilt} suite passed 518 tests; a focused Linux and
-flow run passed 55. Kernel-dependent claims use real bubblewrap/seccomp
-integration, not a mocked adapter.
+Table~\ref{tab:evidence} reports evidence at each layer. The router analyzer
+discovers entries independently of the admission catalog and verifies all 21
+current obligations under its documented contracts. The Tool API verifier
+passes 15,744 cases across inherited execution surfaces and adapters. A focused
+current run of router, object-manager, layered-verification, Landlock, and Linux
+execution tests passes all 151 cases (4 warnings) in 15.84 seconds.
 
 \begin{table*}[t]
 \centering
 \small
-\begin{tabularx}{\textwidth}{clXl}
+\begin{tabularx}{\textwidth}{lXl}
 \toprule
-ID & Property & Enforcing mechanism & Representative failures \\
+Layer & Evidence & Interpretation \\
 \midrule
-A1 & Authority accounting & Explicit mounts, roots, environment, descriptors, channels, and baseline grant lines & Ambient files, env., and FDs \\
-A2 & Conservative lowering & Exact obligation assessment; operation-set and object-type rejection & Narrow writes, special files, nested mounts \\
-A3 & Confinement first & Namespaces/mounts before Python; rlimits/seccomp before \code{GO}; deferred source compile & Imports, shadow modules, bytecode \\
-A4 & Authentic activation & Challenge plus parent-observed kernel state bound to grant, plan, payload, and worker & Context, receipt, mount, artifact mismatch \\
-A5 & Bounded results & 1 MiB frames; JSON-only depth/node bounds; isolated stdout/stderr & Oversize, malformed, deep results \\
-A6 & Safe lifetime & Wait plus PID/start disappearance; kill on timeout; durable uncertain recovery & Timeout, cancellation, unconfirmed exit \\
-A7 & Persistent flow & Atomic SQLite joins/reservations/transfers; fail-closed recovery & Crash, restart, concurrent source/sink \\
-A8 & Accurate limits & Mechanism-specific names and unsupported-limit rejection & Fractional CPU, RSS, persistent quota \\
+Router & 21 discovered, 21 obligated, 21 verified dispatch entries & Complete for the catalog and checker contracts \\
+Tool API & 15,744 conformance cases & Passing inherited-surface inventory \\
+Framework objects & Refusing entries and sync/async tests for dispatch, registry, state/store, checkpoint, model, output, approval & Partial automatic placement \\
+Linux host & Descriptor-bound Landlock, raw syscall, descendant, magic-link, seccomp, activation, and resource-control tests & Implemented host subset \\
+Services & Open-class broker/resource loci and exact receipt contract & Phase two; not runtime evidence \\
 \bottomrule
 \end{tabularx}
-\caption{Frozen Linux acceptance contract. Each row is supported by code-path
-evidence and focused tests; suite totals are corroborating rather than proof.}
-\label{tab:acceptance}
+\caption{Evidence is reported per layer. Passing a component does not establish
+whole-framework complete mediation.}
+\label{tab:evidence}
 \end{table*}
 
-The validation found and fixed five classes of defect: flow reservations were
-released after uncertain termination; async cancellation could outlive its
-reservation; special files and nested-mount subtrees were accepted; unrestricted
-\code{ioctl} exceeded the declared mutation set; and resource names overstated
-CPU precision and physical-memory enforcement. These findings illustrate why
-interface presence and happy-path tests are insufficient evidence.
+Implementation review organized composition risk into six categories: binding
+adapter effects to the effective authorized object; rerunning object DAC on
+approval resume; covering every framework-supported value shape; partitioning
+authoritative state and preserving labels; mediating every publication and
+checkpoint API; and establishing process isolation plus authenticated object RPC
+for untrusted nodes. The focused run includes regression tests for effective
+store objects, resume reauthorization, and principal/session state partitioning.
+Automatic coverage of every value, publication, checkpoint, and dispatch path,
+plus an authenticated untrusted-node host, remains open. These are not cosmetic
+TODOs: each is a route by which component-correct enforcement could fail to
+compose.
 
-\subsection{Q4: compatibility and policy overhead}
+An earlier frozen Linux milestone passed the complete 518-test prebuilt command
+and 55 focused tests. We retain those results as historical compatibility
+evidence, not as measurements of the current Landlock backend. Released-artifact
+validation also passes CaMeL's 126 tests and three Progent checker-parity cases;
+those validate our harness, not comparative security.
 
-We ran matched \code{pytest-benchmark} cases on the same checkout and host. Each
-case invokes a no-op tool through a complete synchronous \code{ToolNode}; the
-only change is security configuration. Figure~\ref{fig:perf} reports overhead
-relative to the security-disabled median. Capability-only mediation increases
-median latency by 13.2\% (593.701 to 672.212~$\mu$s); five no-op modules increase
-it by 49.0\% (to 884.800~$\mu$s). The corresponding absolute increments remain
-below the 200~$\mu$s and 1~ms engineering targets. These numbers measure
-in-process policy mediation, not fresh Linux worker launch.
+\subsection{RQ3: Policy-path overhead}
+
+Matched \code{pytest-benchmark} cases invoke one no-op tool through a complete
+synchronous \code{ToolNode}. The disabled-security median is 593.701~$\mu$s.
+Capability-only mediation is 672.212~$\mu$s, a 13.2\% increase; five no-op
+modules are 884.800~$\mu$s, a 49.0\% increase. Figure~\ref{fig:perf} shows the
+relative cost.
 
 \begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/overhead.pdf}
-\caption{Median policy-path overhead relative to security disabled, Python
-3.12.3. Fresh-worker latency is intentionally not inferred from these
-measurements.}
-\label{fig:perf}
+  \centering
+  \includegraphics[width=\columnwidth]{figures/overhead.pdf}
+  \caption{Recorded in-process policy-path overhead. These measurements do not
+  include the current fresh-worker Landlock path.}
+  \label{fig:perf}
 \end{figure}
 
-With security omitted, the upstream execution path remains the default. New
-request fields have defaults, and no LangChain Core class is modified. The full
-suite's 518 passing tests include the unchanged upstream ToolNode tests. Released
-artifact validation additionally passed CaMeL's 126 tests and three Progent
-checker-parity cases; these confirm harness compatibility, not comparative
-security.
-
-\section{Discussion}
-
-\subsection{Why an adapter abstraction matters}
-
-A Linux mechanism is not an authorization model. If policy directly emitted
-Landlock rights or bubblewrap arguments, moving to Windows would change policy
-semantics and silently weaken unsupported rules. \sys instead negotiates exact
-obligations against a host statement and selected adapters. A Windows backend
-could use handles, restricted tokens, job objects, and filtering mechanisms;
-the grant remains unchanged. A service adapter can coexist with either host.
-
-This split also prevents a common category error: host capability is not adapter
-support. The host may expose a primitive for which no trusted adapter is
-selected, or an adapter may understand a rule the host cannot realize. Both are
-diagnostics, not permission to approximate.
-
-\subsection{Authorization is not intent}
-
-Least privilege is relative to a task. A principal's maximum envelope may allow
-email to a corporate recipient, yet the current user request may not authorize
-that message. For consequential operations, deployments should issue
-task-specific authority bound to principal, tool artifact, normalized concrete
-parameters, policy version, expiry, and replay rules. Approval is such an input,
-not an override of unconditional denial. \sys enforces issued authority; it does
-not claim to infer the correct authority from natural language.
-
-\subsection{Deployment choices}
-
-Fresh workers maximize boundary clarity but add launch cost. Preinitialized
-workers would need to remain free of untrusted imports, prove clean state, and
-bind each activation to a new grant. Long-lived workers complicate revocation,
-flow reservations, and dependency state. We therefore choose fresh workers for
-the reference implementation and leave pooling as an adapter-specific
-optimization subject to the same contract.
+The absolute increments are 78.511~$\mu$s and 291.099~$\mu$s. These results
+isolate policy composition, not end-to-end confinement. We deliberately do not
+extrapolate fresh-worker latency from them; that experiment remains required on
+the release revision.
 
 \section{Limitations}
 \label{sec:limitations}
 
-The current Linux backend is intentionally incomplete in authority domains.
-Useful network, mail, SQL, cloud, and credential-bearing tools require trusted
-service/resource adapters; today such grants deny. This produces security by
-refusal, not useful least-privilege execution. We therefore do not present the
-static composed-adapter projection as an implemented result.
+\paragraph{Placement is incomplete.}
+Adapters exist for the framework objects in Table~\ref{tab:objects}, but several
+general graph, state, checkpoint, completion-callback, and publication paths
+are not automatically routed. Direct Store references and trusted in-process
+compatibility paths remain outside the composed claim.
 
-The accepted contract protects mediated tool workers, not the entire graph
-process. A trusted callback can still become a confused deputy by interpreting
-tool output. Model inference, tracing, telemetry, rendering, checkpoints, and
-artifact handlers must be mediated sinks or explicitly trusted destinations.
+\paragraph{Useful service confinement is phase two.}
+Mail, SQL, cloud, and endpoint-scoped network tools require trusted brokers or
+resource-side credentials. Today unsupported grants deny. That is safe by
+refusal, not useful least-privilege execution.
 
-Session-flow scheduling relies on operator-complete labels and mediated
-transfers. It does not track arbitrary dependencies through model context or
-shared external artifacts. Siblings can pool authority through any unmediated
-channel. The Linux no-process profile bounds background descendants, but the
-trusted in-process path does not supervise them.
+\paragraph{Labels are configuration, not inference.}
+Session scheduling is sound only if labels bound every actual read and every
+outward channel is mediated. The system does not automatically infer task
+intent, provenance, or declassification.
 
-Activation evidence is local and software-rooted. It does not protect against a
-compromised kernel, bubblewrap, seccomp library, launcher, policy backend, or
-trusted module. Read-only mounts do not make backing objects immutable, and live
-subtrees permit external mutation. The primary tool source is digest-pinned;
-dependency identity is not.
+\paragraph{Evidence is local and software-rooted.}
+Receipts do not protect against a compromised kernel, launcher, policy backend,
+canonicalizer, label provider, or trusted module. The router analyzer is trusted
+and has regression tests, not a machine-checked soundness proof. Landlock
+constrains access to live objects; it does not provide snapshot integrity.
 
-Our comparative E1 analysis is small and synthetic. Static exposure is an upper
-bound; E2 canaries establish particular lower-bound bypasses. The completed
-artifact does not yet contain dynamic \sys runs over AgentDojo, InjecAgent, or
-ASB, nor a fresh-worker latency distribution. Those experiments are necessary
-before a final empirical claim about benchmark utility or deployment overhead.
+\paragraph{Evaluation is not yet complete.}
+The canary suite is small and synthetic. Dynamic \sys rows for AgentDojo,
+InjecAgent, and ASB, service-broker experiments, and fresh-worker latency remain
+necessary before making broad utility or deployment claims.
 
 \section{Related Work}
 
-\paragraph{Agent policy and information flow.}
-Progent expresses symbolic privilege rules over tool names and arguments and
-uses SMT to ensure unapproved policy updates only shrink authority~\cite{progent}.
-SEAgent models multi-agent privilege escalation using ABAC and an information-
-flow graph~\cite{seagent}. CaMeL separates trusted control flow from untrusted
-data and applies capabilities to prevent unauthorized flows~\cite{camel}. These
-systems motivate our argument policy, history, and monotonicity. \sys differs by
-making the tool's DAC, independent mandatory modules, host/service/resource
-lowering, and activation evidence one framework contract. Its flow scheduler is
-coarser than CaMeL and explicitly conditional on confinement and complete labels.
+\paragraph{Agent privilege and information flow.}
+Progent introduces expressive tool-call policies, automated policy construction,
+and SMT-checked monotonic updates~\cite{progent}. SEAgent combines ABAC with an
+agent information-flow graph~\cite{seagent}. CaMeL protects flows by separating
+trusted control from untrusted data~\cite{camel}. \sys addresses the boundary
+below and around an admitted call: hostile implementation effects, framework
+objects, host confinement, and evidence that enforcement activated. Its coarse
+session scheduler is less precise than CaMeL and explicitly conditional on
+complete labels and sink mediation.
 
-\paragraph{Agent-security benchmarks.}
-AgentDojo provides stateful tasks and security cases for indirect prompt
-injection~\cite{agentdojo}. InjecAgent contains 1,054 cases over user and attacker
-tools~\cite{injecagent}; ASB spans multiple attack classes, agents, scenarios,
-and hundreds of tools~\cite{asb}. These benchmarks primarily score behavioral
-attack success and utility. Our exposure census instead asks whether effects lie
-below a defense's mediation point. The measures are complementary.
+\paragraph{Agent-security evaluation.}
+AgentDojo provides stateful tasks and indirect-prompt-injection security
+cases~\cite{agentdojo}. InjecAgent contains 1,054 cases over user and attacker
+tools~\cite{injecagent}; ASB spans multiple attack classes, scenarios, and
+hundreds of tools~\cite{asb}. These benchmarks primarily measure behavioral
+attack success and utility. Our canaries isolate whether an admitted
+implementation retains unauthorized authority; the questions are complementary.
 
-\paragraph{Security frameworks and sandboxing.}
-LSM's fixed hooks, preserved DAC, module stacking, and opaque per-object state
-directly inspire \sys~\cite{wright2002lsm}. Prior work also showed that hook
-placement itself requires systematic analysis~\cite{zhang2002cqual}. Landlock
-lets unprivileged processes add filesystem restrictions and composes
-restrictively with existing controls~\cite{landlock}; bubblewrap constructs
-namespace/mount sandboxes for unprivileged workloads~\cite{bubblewrap}. \sys is
-not tied to either mechanism: these are possible Linux implementations behind a
-semantic adapter contract.
+\paragraph{Reference monitors and hook placement.}
+LSM separates fixed mediation hooks from policy, preserves discretionary checks,
+and supports restrictive module composition~\cite{wright2002lsm,linuxlsm}.
+SELinux user-space object managers extend the same architecture beyond kernel
+objects~\cite{selinuxnotebook,sepgsql}. Prior work shows that authorization-hook
+placement itself requires systematic analysis~\cite{zhang2002cqual}. \sys
+adapts these ideas to framework objects and agent execution paths.
 
-\paragraph{Authorization languages.}
-Cedar offers typed, analyzable principal--action--resource--context policies and
-permit-overridden-by-forbid composition~\cite{cedar}. \sys uses a constructive
-profile language for tool/principal intersection and a typed forbid IR for
-mandatory modules. A Cedar backend can implement mandatory filtering, but native
-enforcement plans remain outside Cedar.
+\paragraph{Sandboxing and authorization.}
+Landlock provides unprivileged, monotonic restriction over filesystem and port
+objects~\cite{landlock}; seccomp restricts syscall classes~\cite{seccomp}. Cedar
+provides typed principal--action--resource--context policies with forbid-overrides
+composition~\cite{cedar}. \sys uses Cedar for authorization and Linux mechanisms
+for enforcement; neither is asked to model the other's domain.
 
 \section{Conclusion}
 
-Agent security cannot stop at deciding whether a tool call looks acceptable.
-For hostile implementations, the security property lives below that interface:
-actual authority must be no broader than an exact grant, every restriction must
-have an enforcer, and the system must know that enforcement was active for the
-worker that ran.
+Authorizing a tool call and bounding its effects are different security
+problems. A precise policy can approve the right request while hostile code or
+an unmediated framework path exercises the wrong authority. \sys closes this
+effect gap by composing a framework object manager with host confinement and by
+requiring evidence before execution.
 
-\sys brings this principle into LangGraph through LSM-style hooks, constructive
-DAC, restrictive mandatory modules, platform-neutral grants, exact obligation
-negotiation, and verified activation. Its Linux backend demonstrates a working
-filesystem/resource boundary with conservative failure semantics. The result is
-not automatic agent safety. It is a precise foundation on which independently
-authored policies and replaceable enforcement mechanisms can compose without
-turning unsupported authority into an implicit allow.
+The current implementation establishes this chain for a certified router subset
+and a Linux host subset. It does not yet establish whole-framework complete
+mediation, and the remaining placement failures are part of the result. That
+honesty is not merely caution: a reference monitor is defined as much by the
+paths it cannot miss as by the policies it can express.
 
 \bibliographystyle{plain}
 \bibliography{references}
@@ -751,53 +674,42 @@ turning unsupported authority into an implicit allow.
 \appendix
 \section{Open Science}
 
-The anonymized artifact will include the LangGraph fork, the standalone
-evaluation harness, pinned dependency manifests, deliberately vulnerable tools,
-frozen model transcripts, hash-chained audit databases, generated tables, and
-commands for reproducing E0--E2, the Linux acceptance suite, and policy
-microbenchmarks. At submission, this paragraph will contain a history-free,
-non-tracking SEC27 artifact URL. The public repository and author-identifying
-commit history are intentionally omitted during double-blind review.
-
-The artifact distinguishes measured data, static projections, and pending work
-in machine-readable reports. Third-party source is pinned but remains under its
-original license. Runs that require unavailable hosted models are not silently
-substituted; local-model settings and immutable layer digests are recorded.
+The anonymous artifact will include the LangGraph fork, policy manifests,
+router and Tool API verifiers, Linux integration tests, canary tools, frozen
+model transcripts, audit databases, generated figures, and commands for every
+reported result. Machine-readable reports distinguish measurements,
+certificates under contracts, projections, and pending work. At submission this
+section will include a history-free, non-tracking artifact URL.
 
 \section{Ethical Considerations}
 
-This work studies defenses for attacker-influenced agents. The bypass examples
-could help identify weak call-boundary guards, but require no novel exploit
-against a deployed service. Dynamic experiments target only deliberately
-vulnerable tools in temporary directories, loopback listeners, and synthetic
-data. We do not probe or modify third-party deployments. Canary values are fake,
-and audit logs hash arguments by default.
+The bypass canaries target deliberately vulnerable tools in temporary
+directories, synthetic databases, and loopback services. They do not probe or
+modify third-party deployments. Canary values are fake and audit logs hash
+arguments by default.
 
-The framework can be misconfigured to deny legitimate work or to create a false
-sense of confinement. We mitigate this risk by rejecting unsupported grants,
-labeling degraded results, publishing a frozen threat model, and separating
-interface decisions from enforcement evidence. Operators remain responsible for
-policy correctness, TCB maintenance, user notice, and recovery from
+A security framework can create false confidence when its placement or host
+support is incomplete. \sys mitigates that risk by denying unsupported grants,
+stamping waivers as degraded, publishing the protected-operation inventory, and
+separating component evidence from system claims. Operators remain responsible
+for policy correctness, TCB maintenance, user notice, and recovery from
 \code{INDETERMINATE} operations.
 
-\section{Artifact Evidence Map}
-
-The anonymous snapshot preserves the following claim-to-evidence map:
+\section{Artifact Claim Map}
 
 \begin{itemize}
-  \item Linux A1--A8: the frozen contract, execution path, defects, and focused
-  tests in \path{docs/security/linux-enforcement-acceptance.md}.
-  \item Compatibility: run \code{make test} from \path{libs/prebuilt}.
-  \item Policy overhead: \path{benchmarks/test_tool_node.py} and
-  \path{benchmarks/test_security_overhead.py}.
-  \item Static exposure: per-sink traces and mediation decisions in
+  \item Layered status and open placement findings:
+  \path{docs/security/status.md} and
+  \path{docs/security/host-routing-completeness.md}.
+  \item Router and API verification: run \code{make security-verify} from
+  \path{libs/prebuilt}; checked reports live under \path{docs/security/}.
+  \item Linux enforcement: \path{libs/prebuilt/tests/security/test_landlock.py}
+  and \path{test_linux_execution.py}.
+  \item Effect-gap canaries: \path{eval/reports/e2/}; static traces:
   \path{eval/reports/e1/exposure.json}.
-  \item Runtime canaries: replayed calls and observed local side effects in
-  \path{eval/reports/e2/}.
-  \item Third-party parity: released suites and checker comparisons in
-  \path{eval/reports/generated/e0-baseline-validation.md}.
-  \item Reproducibility: hardware, model, source, and package identities in
-  \path{eval/HARDWARE.md} and \path{eval/PINS.md}.
+  \item Policy overhead: \path{libs/prebuilt/benchmarks/}.
+  \item Reproducibility identities: \path{eval/HARDWARE.md} and
+  \path{eval/PINS.md}.
 \end{itemize}
 
 \end{document}
