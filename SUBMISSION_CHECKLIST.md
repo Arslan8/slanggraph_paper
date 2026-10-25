@@ -5,9 +5,23 @@ submission is due January 26, 2027 (Anywhere on Earth). The submission permits
 13 pages of body text, unlimited references and appendices, and requires an Open
 Science appendix.
 
-## Evidence already incorporated
+## Current design alignment
 
-- Layered reference-monitor architecture at revision `53c5d317`, including the
+Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 2026).
+
+- Implemented open resource classes, typed mediator contracts, pump and SQLite
+  record mediation; these are no longer merely proposed.
+- Sealed operator runtime MAC, rejection of unsupported execution paths and
+  waivers, and mandatory restricted in-process source admission.
+- Replaceable analyzers, immutable policies, per-attempt snapshots, provenance
+  propagation, scoped developer access, and tool/model/output policy integration.
+- Analysis validation reported separately: 42 analysis tests and 123 regressions
+  passed; full prebuilt run 3,701 passed, 58 host-unavailable failures, four skipped.
+  This revision of the paper did not rerun those implementation tests.
+
+## Historical evidence retained
+
+- Earlier layered reference-monitor evidence at revision `53c5d317`, including the
   target ten-class object inventory, shared `HostRouter`, Cedar policy
   partitions, and separate Landlock and bubblewrap execution paths.
 - Optional OSTree tool/runtime selection on the bubblewrap path, plus separately
@@ -67,9 +81,22 @@ Science appendix.
   existing third-party canaries, router evidence, and Linux tests separately.
 - Complete AgentDojo, InjecAgent, and ASB parity runs or remove the prospective
   benchmark discussion. Never report unexecuted runs.
-- Implement, freeze, and test the proposed open object-class API before reporting
-  it as shipped. Cover parser/registry support, resume reauthorization,
-  effective-object binding, evidence cardinality, and scoped runtime waivers.
+- Freeze and rerun the implemented resource API and broker evidence. Cover
+  parser/registry support, resume reauthorization, effective-object binding,
+  protected-path overlap and aliases, exact per-request grants, cancellation, and
+  unsupported requirements. Runtime MAC rejects enforcement waivers; keep that
+  contract distinct from lower-level APIs that allow explicit degradation.
+- Hold one mandatory rule fixed and test native tool reads, child execution,
+  local overrides, broker substitutions, and alternate graph entry points. Include
+  properly configured sandbox/broker baselines; document who can change policy.
+- Evaluate the sealed runtime MAC path and analysis runtime together on supported
+  graph shapes. Separate refusal of unsupported execution from useful support.
+- Add held-out classifier accuracy, provenance propagation, failure/deadline, and
+  public/internal destination experiments. Do not infer classifier soundness from
+  scripted detections or full CaMeL/Progent compatibility from finite fixtures.
+- Keep historical E2 `langchain-forge==0.2.0` (with `veritera==0.4.0`)
+  distinct from the separately reviewed FORGE/SASY framework. `eval/PINS.md`
+  records the package hashes; no FORGE/SASY execution result is claimed.
 - Preserve explicit policies and host-dependent outcomes. Distinguish valid
   tightening from an eligible obligation waiver; static-analysis waivers are
   not runtime permission to disable confinement.
@@ -82,3 +109,4 @@ Science appendix.
 - Produce a history-free anonymous artifact with a stable SEC27 URL.
 - Add author names, affiliations, ORCIDs, acknowledgments, and the stable public
   artifact URL only for the camera-ready version.
+

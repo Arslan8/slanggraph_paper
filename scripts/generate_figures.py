@@ -160,73 +160,37 @@ def motivation() -> None:
 
 
 def architecture() -> None:
-    """Draw the layered slangGraph reference-monitor architecture."""
-    fig, ax = plt.subplots(figsize=(7.0, 3.05))
+    """Show requirements, fixed policy, and distinct enforcement contracts."""
+    fig, ax = plt.subplots(figsize=(7.0, 3.35))
     ax.set_xlim(0, 14)
-    ax.set_ylim(0, 8)
+    ax.set_ylim(0, 8.5)
     ax.axis("off")
-
-    _box(ax, (0.3, 6.3), 2.4, 0.9, "Model / subagent\n(untrusted intent)", facecolor="#f2f2f2")
-    _box(ax, (3.25, 6.3), 3.0, 0.9, "HostRouter\nsingle refusing path", facecolor="#bdbdbd")
-    _box(ax, (7.0, 6.3), 2.6, 0.9, "Policy\nDAC then forbids", facecolor="#e4e4e4")
-    _box(ax, (10.4, 6.3), 3.1, 0.9, "Exact grant\n+ baseline authority", facecolor="#d2d2d2")
-    _arrow(ax, (2.7, 6.75), (3.25, 6.75))
-    _arrow(ax, (6.25, 6.75), (7.0, 6.75))
-    _arrow(ax, (9.6, 6.75), (10.4, 6.75))
-
-    framework_band = FancyBboxPatch(
-        (0.3, 3.9),
-        13.2,
-        1.45,
-        boxstyle="round,pad=0.025,rounding_size=0.035",
-        facecolor="#f7f7f7",
-        edgecolor="#5a5a5a",
-        linewidth=0.8,
-    )
-    ax.add_patch(framework_band)
-    ax.text(0.5, 5.02, "FRAMEWORK OBJECT MANAGER", fontsize=7.2, fontweight="bold", color="#4a4a4a")
-    framework = ["dispatch", "registry", "state/store", "checkpoint", "model input", "output"]
-    for index, label in enumerate(framework):
-        x = 0.5 + index * 2.17
-        _box(ax, (x, 4.15), 1.75, 0.62, label, facecolor="white", fontsize=6.6)
-    _arrow(ax, (4.75, 6.3), (4.75, 5.35), color="#4a4a4a")
-
-    host_band = FancyBboxPatch(
-        (0.3, 1.15),
-        13.2,
-        1.75,
-        boxstyle="round,pad=0.025,rounding_size=0.035",
-        facecolor="#f7f7f7",
-        edgecolor="#5a5a5a",
-        linewidth=0.8,
-    )
-    ax.add_patch(host_band)
-    ax.text(0.5, 2.57, "HOST ENFORCEMENT", fontsize=7.2, fontweight="bold", color="#4a4a4a")
-    _box(ax, (0.5, 1.4), 2.35, 0.8, "Trusted parent\nresolve + lower", facecolor="#e4e4e4")
-    _box(ax, (3.25, 1.4), 2.25, 0.8, "Fresh worker\nrelease barrier", facecolor="#bdbdbd")
-    _box(ax, (5.9, 1.4), 2.05, 0.8, "Landlock\nobjects", facecolor="white")
-    _box(ax, (8.35, 1.4), 2.05, 0.8, "seccomp\nsyscalls", facecolor="white")
-    _box(ax, (10.8, 1.4), 2.35, 0.8, "cgroup / rlimit\nresources", facecolor="white")
-    # Route the grant connection around the framework band, not through output.
-    ax.plot(
-        [11.95, 11.95, 13.8, 13.8, 11.95],
-        [6.3, 5.7, 5.7, 3.2, 3.2],
-        color="#4a4a4a",
-        linewidth=0.8,
-    )
-    _arrow(ax, (11.95, 3.2), (11.95, 2.9), color="#4a4a4a")
-    _arrow(ax, (2.85, 1.8), (3.25, 1.8))
-    _arrow(ax, (5.5, 1.8), (5.9, 1.8))
-    _arrow(ax, (7.95, 1.8), (8.35, 1.8))
-    _arrow(ax, (10.4, 1.8), (10.8, 1.8))
-    ax.text(
-        7.0,
-        0.45,
-        "Activation receipt binds principal, request, grant, lowering, worker, and mechanisms before release",
-        ha="center",
-        fontsize=7.2,
-        fontweight="bold",
-    )
+    _box(ax, (0.2, 7.0), 3.1, 1.0, "Requirement producer\nresource manifest", facecolor="#f2f2f2")
+    _box(ax, (5.0, 7.0), 3.6, 1.0, "Authorization\nprincipal DAC + operator MAC", facecolor="#d2d2d2", fontsize=6.3)
+    _box(ax, (10.2, 7.0), 3.5, 1.0, "Invocation grant\nresources + baseline", facecolor="#d2d2d2")
+    _arrow(ax, (3.3, 7.5), (5.0, 7.5))
+    _arrow(ax, (8.6, 7.5), (10.2, 7.5))
+    _box(ax, (0.2, 4.7), 3.5, 1.2, "Trusted analyzers\nfindings + provenance\nno policy updates", facecolor="#f2f2f2")
+    _box(ax, (5.0, 4.7), 3.6, 1.2, "Fixed security modules\nrequired analysis barriers\nfresh attempt snapshot", facecolor="#e4e4e4")
+    _box(ax, (10.2, 4.7), 3.5, 1.2, "Framework mediation\nstate / model / output\nexplicit coverage contracts", facecolor="#e4e4e4")
+    _arrow(ax, (3.7, 5.3), (5.0, 5.3))
+    _arrow(ax, (6.8, 5.9), (6.8, 7.0))
+    _arrow(ax, (11.95, 7.0), (11.95, 5.9))
+    _arrow(ax, (8.6, 5.3), (10.2, 5.3))
+    boxes = [
+        (0.2, "Restricted in-process APIs\nsource-body admission\nactive-grant checks"),
+        (4.9, "Resource mediators\npump / SQLite / custom\nper-request grant checks"),
+        (9.6, "Host-confined workers\nLandlock / seccomp\nactivation before import"),
+    ]
+    for x, label in boxes:
+        _box(ax, (x, 1.6), 4.0, 1.35, label, facecolor="#f2f2f2", fontsize=7.1)
+    # One grant fans out to alternative/cooperating enforcement paths.
+    ax.plot([13.9, 13.9, 2.2], [7.5, 3.6, 3.6], color="#4a4a4a", linewidth=0.8)
+    ax.plot([13.7, 13.9], [7.5, 7.5], color="#4a4a4a", linewidth=0.8)
+    for x in (2.2, 6.9, 11.6):
+        _arrow(ax, (x, 3.6), (x, 2.95))
+    ax.text(7.0, 0.65, "Unsupported routes deny under runtime MAC; trusted adapters must preserve the grant",
+            ha="center", fontsize=7.1, fontweight="bold")
     _save(fig, "architecture.pdf")
 
 
@@ -274,3 +238,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

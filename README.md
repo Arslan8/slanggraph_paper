@@ -1,33 +1,38 @@
 # slangGraph paper
 
-USENIX Security '27 paper source for slangGraph. The manuscript uses the
-official USENIX LaTeX style and is anonymous by default.
+Anonymous USENIX-style manuscript for slangGraph.
 
 ```bash
 make
 make check
 ```
 
-`make` regenerates the three vector figures with Matplotlib before building
-the paper. The plotting source and currently hard-coded benchmark medians live
-in `scripts/generate_figures.py`. Set `PYTHON=/path/to/python` to choose the
-interpreter. `make check` verifies basic PDF readability and font embedding;
-it does not certify venue page limits, anonymity, or evidence completeness.
+`make` regenerates the vector figures with Matplotlib and builds the paper.
+Set `PYTHON=/path/to/python` to select an interpreter. `make check` checks PDF
+readability and font embedding, not venue compliance or evidence completeness.
 
-The paper's implementation baseline is slangGraph revision `53c5d317`.
-It distinguishes the namespace-free Landlock executor from the bubblewrap
-executor that integrates OSTree tool/runtime deployments. General open object
-classes remain a proposed language extension. Quantitative claims retain their
-own recorded implementation revisions; policy-only and bubblewrap measurements
-must not be attributed to Landlock. Static projections, fake-OSTree regression
-tests, recorded development observations, and incomplete framework placement
-are identified separately.
+The current design baseline is `Arslan8/slanggraph:wip` at
+`40e24e978f9ec2e8f061abb21077e2251583f5e5` (October 25, 2026).
+The motivation centers on preserving mandatory restrictions from manifest
+requirements through invocation grants to actual effects. The manuscript now
+covers sealed runtime MAC, restricted in-process admission, typed domain
+mediators, SQLite record mediation, and the fixed-policy analysis/provenance
+runtime. Its comparison table distinguishes explicit configuration exceptions
+from trusted-tool and instrumentation boundaries.
 
-The first alignment revision also identifies deployment lifecycle work and the
-recorded SGV107/SGV108 adapter findings. The router certificate and finite API
-matrix do not establish a complete system verification pass. See
-`SUBMISSION_CHECKLIST.md` for the code fixes and experiments still required.
+Historical canaries, router/API certificates, Linux tests, and benchmark medians
+retain their original source snapshots. They are not measurements of the latest
+analysis runtime or object broker. The analysis validation record is reported
+separately, including its unavailable-host failures. See
+`SUBMISSION_CHECKLIST.md` for evidence still required. The plotted performance
+medians remain historical hard-coded data, not a fresh experiment.
 
-Before submission, create a history-free anonymous artifact snapshot and replace
-the placeholder Open Science URL. Do not put author names or affiliations in
-`main.tex` while the submission is under double-blind review.
+The low-level Landlock executor, object-broker worker, and deployment-backed
+bubblewrap executor have different integration coverage. Do not transfer
+activation, lifecycle, or performance claims between them. Source-body admission
+does not certify imports or arbitrary Python, and runtime MAC is per interpreter
+under trusted bootstrap. Policy and analysis extensions remain trusted.
+
+Before submission, prepare a history-free anonymous artifact and replace the
+placeholder Open Science URL. Keep author identity out of `main.tex`; preserve
+ordinary attribution to prior work. Avoid em dashes in manuscript prose.
