@@ -15,6 +15,12 @@
 
 \newcommand{\sys}{\textsc{slangGraph}\xspace}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcounter{rmrequirement}
+\renewcommand{\thermrequirement}{R\arabic{rmrequirement}}
+\newcommand{\rmrequirement}[2]{\refstepcounter{rmrequirement}\paragraph{\thermrequirement: #2.}\label{#1}}
+\newcounter{designgoal}
+\renewcommand{\thedesigngoal}{D\arabic{designgoal}}
+\newcommand{\designgoal}[2]{\refstepcounter{designgoal}\paragraph{\thedesigngoal: #2.}\label{#1}}
 
 \begin{document}
 \date{}
@@ -46,6 +52,7 @@ rejected by source admission, demonstrating why both paths are needed.
 \end{abstract}
 
 \section{Introduction}
+\label{sec:intro}
 
 Agentic systems build and deploy software~\cite{replitagent}, analyze
 databases~\cite{aidatascienceteam}, conduct document
@@ -187,6 +194,50 @@ Our contributions are:
 \end{itemize}
 \end{samepage}
 
+\section{Background and Threat Model}
+\label{sec:background}
+\label{sec:model}
+
+\subsection{LangGraph background}
+
+LangGraph represents an application as nodes operating on shared state and
+edges selecting subsequent work~\cite{langgraphapi}. Nodes may call models,
+invoke tools, update state, or launch subgraphs. \code{ToolNode} executes tool
+calls requested by the model; it is one dispatch surface, not the entire
+application. Pregel execution schedules parallel work in steps~\cite{langgraphpregel}.
+Checkpointers save
+execution state for resume, while stores retain data across
+interactions~\cite{langgraphpersistence}. Consequently, a tool return can later
+reach a model prompt, checkpoint, or outward publication.
+
+\subsection{Threat model}
+
+The adversary controls model outputs, retrieved data, tool arguments, untrusted
+tool and node code, dependencies loaded after confinement, and subagent prompts.
+It may exploit retries, argument rewriting, path races, import side effects,
+malformed results, resource exhaustion, cancellation, and stale checkpoints.
+
+The framework TCB contains authentication, the coordinator and router, policy
+backend, modules, canonicalizers, grant compiler, framework adapters, audit and
+flow stores, and operator-promoted trusted nodes. The host TCB contains the
+kernel, launcher, enforcement adapter, and supervisor. In deployment mode, the
+deployment manager, its protected store, and approved runtime publishers also
+belong to the TCB. Kernel compromise, side
+channels, denial of service, and a provider's handling of data after authorized
+submission are outside the claim. Trusted initialization and mediator code are
+not confined by a tool-body certificate. Policy conformance does not establish
+task correctness. An untrusted requirement producer submits data through the manifest
+interface; installing its Python code as an analyzer would instead add it to
+the TCB. A mediated service is trusted for its resource semantics and must be
+protected from direct worker access.
+
+The protected inventory covers principal transfer, tool and child dispatch,
+registry changes, state/store access, approval resume, guarded framework
+operations, model prompts, output publication, and host resources. It is
+independent of hook placement: a missing check on a declared protected path is a
+coverage failure. General LangGraph paths outside the admitted contract remain
+unresolved (Section~\ref{sec:limitations}).
+
 \section{Motivation}
 \label{sec:gap}
 
@@ -250,6 +301,11 @@ by the documented semantics, not a reproduced exploit. A developer must carry
 the restriction into every override. A mandatory read-only ceiling should
 survive local grants across framework, resource, and host enforcers.
 
+Enforcement placement also determines cost. A small runtime read should avoid
+worker launch and transport when language restrictions enforce the same
+permission. Opaque binaries still need host confinement. Supporting both paths
+avoids forcing a choice between compatibility, policy consistency, and cost.
+
 \paragraph{Required enforcement contract.}
 These cases require one authoritative invocation grant, derived from proposed
 requirements and principal/mandatory policy. For the record example, \sys binds
@@ -260,8 +316,61 @@ local configuration cannot widen the sealed operator ceiling. Policy consistency
 becomes an enforcement obligation, with trusted adapters responsible for
 realizing the contract on supported paths (Section~\ref{sec:model}).
 
-\section{Security Model}
-\label{sec:model}
+\section{Overview}
+\label{sec:overview}
+
+\subsection{Reference-monitor requirements}
+\label{sec:requirements}
+
+Following EC's Embedded Compartmentalizer Kernel (ECK)~\cite{khan2023ec}, the
+composed boundary must satisfy three classical reference-monitor
+requirements~\cite{anderson1972reference,jaeger2011reference}.
+
+\rmrequirement{req:mediation}{Complete mediation}
+Every protected operation must reach a refusing check before its effect.
+Required paths without such mediation must not be admitted. This includes
+framework operations as well as effects inside an approved tool.
+
+\rmrequirement{req:tamperproof}{Tamperproofness}
+Code outside the TCB must not alter policy, grants, monitor state, provenance,
+or confinement. Trusted setup and mediator code remain within the TCB.
+
+\rmrequirement{req:verifiability}{Verifiability}
+Dispatch and adapter contracts must be explicit and bounded enough to analyze
+mediation, isolation, and authorization correctness. Activation evidence
+identifies installed controls; it does not prove their correctness.
+
+\subsection{Design goals}
+\label{sec:goals}
+
+The introduction and Section~\ref{sec:gap} impose four additional goals.
+
+\designgoal{goal:policy}{Unified policy across distributed enforcers}
+Derive one invocation authority ceiling from requirements and principal/operator
+policy. Framework, resource, and host monitors must preserve it without manually
+maintained permission copies. Local grants, delegation, and configuration changes
+must not remove mandatory restrictions.
+
+\designgoal{goal:lowering}{Flexible and faithful lowering}
+Adapt enforcement to runtime tools, shims over companion binaries, and mediated
+services, and to the available host mechanisms. Compose the required monitors
+and expose exact, tightened, or unsupported obligations. Refuse execution when
+a required obligation cannot be enforced; placement must not broaden authority.
+
+\designgoal{goal:overhead}{Low enforcement overhead}
+Avoid worker launch and transport when language-based admission and monitored
+APIs suffice. Keep authorization on this in-process path; use host confinement
+when implementations require it. Measure complete authorized-path cost as well
+as isolated execution cost.
+
+\designgoal{goal:extensibility}{Extensible enforcement}
+Let independent requirement producers, analyses, resource classes, and host
+adapters reuse the enforcement contract. New inference should not require
+rebuilding the reference monitor. Proposed requirements remain untrusted data;
+installed analysis and enforcement code remains trusted.
+
+\subsection{Invocation authority and composition}
+\label{sec:contract}
 
 Let $c=(p,t,a,h)$ denote a call with authenticated principal $p$, tool $t$,
 arguments $a$, and security history $h$. Let $R(c)$ be the canonical candidate
@@ -279,107 +388,25 @@ survive mandatory forbids; the runtime baseline is operator-approved.
 Equation~\ref{eq:effect} is a conditional enforcement
 obligation, not a claim that finite tests establish every reachable effect.
 
-\subsection{Reference-monitor requirements}
+Figure~\ref{fig:architecture} separates the cooperating monitors. The
+\emph{router} (\code{HostRouter}) intercepts protected framework operations;
+the \emph{authorizer} computes the grant. The \emph{coordinator} negotiates
+obligations and verifies activation before the \emph{dispatcher} releases
+execution. Framework object managers enforce state, model, and output policy.
+Admitted tools use grant-checked runtime APIs; native workers use host
+confinement and an authenticated \emph{object broker} for domain operations.
+A trusted \emph{resource mediator} checks each such operation. Remote services
+require enforcement at their own resource boundary.
 
-Following EC's Embedded Compartmentalizer Kernel (ECK), we organize enforcement
-around complete mediation, tamperproofness, and verifiability~\cite{khan2023ec}.
-These are the classical
-reference-monitor obligations~\cite{anderson1972reference,jaeger2011reference};
-here they apply across the agent runtime and its execution backends.
-
-\paragraph{G1: Complete mediation.}
-For an admitted deployment, every operation in its protected inventory must
-reach a refusing check before its effect. The supported contract includes the
-admitted tool path and the framework/model/output routes declared for that
-deployment. Runtime MAC rejects unsupported graph shapes rather than granting
-them this guarantee. A missing hook on a declared protected path is a coverage
-failure, not a reason to redefine scope. General LangGraph compatibility paths
-remain outside the established contract (Section~\ref{sec:limitations}).
-
-\paragraph{G2: Tamperproofness.}
-Code outside the TCB must not modify the monitor, policy, grants, provenance, or
-confinement configuration. \sys separates hostile native code from the
-coordinator and admits in-process tool bodies only under a restricted API
-contract. Bootstrap code and resource mediators remain trusted.
-
-\paragraph{G3: Verifiability.}
-The enforcement mechanism must be sufficiently bounded and explicit to support
-systematic analysis of G1, G2, and authorization correctness. \sys exposes
-dispatch and adapter contracts for this purpose;
-Section~\ref{sec:evaluation} reports the current component checks. Activation
-receipts bind a worker to enforced mechanisms, but do not prove monitor
-correctness.
-
-\paragraph{Monotonic authority under composition.}
-We additionally require that preparation, delegation, policy modules, and
-lowering preserve or reduce authority. An unsupported required obligation
-denies. Explicit waivers are limited to obligations eligible for degradation;
-they do not waive identity binding, default deny, or isolation before import.
-Degraded executions do not carry the complete grant-subset claim. The
-sealed runtime-MAC path rejects enforcement waivers entirely.
-
-\subsection{Threat model}
-
-The adversary controls model outputs, retrieved data, tool arguments, untrusted
-tool and node code, dependencies loaded after confinement, and subagent prompts.
-It may exploit retries, argument rewriting, path races, import side effects,
-malformed results, resource exhaustion, cancellation, and stale checkpoints.
-
-The framework TCB contains authentication, the coordinator and router, policy
-backend, modules, canonicalizers, grant compiler, framework adapters, audit and
-flow stores, and operator-promoted trusted nodes. The host TCB contains the
-kernel, launcher, enforcement adapter, and supervisor. In deployment mode, the
-deployment manager, its protected store, and approved runtime publishers also
-belong to the TCB. Kernel compromise, side
-channels, denial of service, and a provider's handling of data after authorized
-submission are outside the claim. Trusted initialization and mediator code are
-not confined by a tool-body certificate. Task intent is also separate: exact authority does not
-prove that an allowed action is beneficial.
-This boundary puts credential custody, entitlement, and enforcement under
-operator control while treating generated requests and confined implementations
-as hostile. An untrusted requirement producer submits data through the manifest
-interface; installing its Python code as an analyzer would instead add it to
-the TCB. A mediated service is trusted for its resource semantics and must be
-protected from direct worker access.
-
-\section{Design Overview}
-\label{sec:overview}
-
-\subsection{LangGraph background}
-
-LangGraph represents an application as nodes operating on shared state and
-edges selecting subsequent work~\cite{langgraphapi}. Nodes may call models,
-invoke tools, update state, or launch subgraphs. \code{ToolNode} executes tool
-calls requested by the model; it is one dispatch surface, not the entire
-application. Compilation produces a Pregel runtime that schedules work in
-steps, including parallel branches~\cite{langgraphpregel}. Checkpointers save
-execution state for resume, while stores retain data across
-interactions~\cite{langgraphpersistence}. Consequently, a tool return can later
-reach a model prompt, checkpoint, or outward publication. Retrying or restoring
-work must preserve identity and rerun the applicable authorization checks.
-
-\subsection{Components and execution paths}
-
-Figure~\ref{fig:architecture} separates responsibilities. The \emph{router}
-(\code{HostRouter}) intercepts protected framework operations. The
-\emph{authorizer} computes grants; the \emph{coordinator} negotiates obligations
-and validates activation. An \emph{object manager} enforces framework operations.
-The \emph{dispatcher} selects in-process or worker execution. Its
-\emph{object broker} authenticates worker requests and invokes a trusted
-\emph{resource mediator}, such as the SQLite record service. Host adapters
-constrain effects outside those APIs.
-
-There are three production Linux paths. \code{LandlockSandboxExecutor} provides
-namespace-free filesystem/syscall confinement; \code{LinuxSandboxExecutor}
-uses bubblewrap and supports versioned deployments; \code{ObjectBrokerDispatcher}
-composes a separate Landlock worker with semantic mediators. The protected
-Pandas experiment uses the bubblewrap path. The new Landlock/rootless-container
-timings use evaluation adapters around a common authorizer, not these production
-executors. Their telemetry is distinct from production activation receipts.
-
+% Author-supplied overview: add figures/overview.pdf to replace the provisional
+% generated architecture. The figure generator does not write overview.pdf.
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/architecture.pdf}
+  \IfFileExists{figures/overview.pdf}{%
+    \includegraphics[width=\textwidth]{figures/overview.pdf}%
+  }{%
+    \includegraphics[width=\textwidth]{figures/architecture.pdf}%
+  }
   \caption{\sys architecture. A shared grant connects framework, resource, and host enforcers.
   Requirement producers propose authority; trusted policy decides it. Analysis
   supplies evidence to fixed policy. Semantic mediators check domain operations;
@@ -388,26 +415,15 @@ executors. Their telemetry is distinct from production activation receipts.
   \label{fig:architecture}
 \end{figure*}
 
-\subsection{Scope and authority}
-
-The protected inventory is independent of hook placement. It covers principal
-transfer, tool and child dispatch, registry changes, state/store access,
-approval resume, explicitly guarded framework operations, model prompts,
-output publication, and host resources. A missing refusing route is a coverage
-failure. \code{ToolNode} and \code{guarded\_tool} are clients of the router,
-not independent reference monitors.
-
-Authorization determines the grant; adapters make other authority unavailable;
-activation evidence binds those controls to the actual execution. A policy
-decision or an adapter capability name alone cannot establish all three.
-
 \section{Framework Object Manager}
 \label{sec:objects}
 
 \subsection{Single-path dispatch}
+\label{sec:dispatch}
 
-\code{HostRouter} is the sole protected dispatch entry on router-mediated
-framework paths; resource tools use the authorizer/dispatcher contract.
+\code{HostRouter} implements Goal~\ref{goal:policy} as the sole protected
+dispatch entry on router-mediated framework paths; resource tools use the
+authorizer/dispatcher contract.
 Sync and async APIs share these contracts. Every physical retry
 receives a fresh request and decision; this matters because LangGraph wrappers
 may call their \code{execute} continuation repeatedly with changed arguments.
@@ -462,8 +478,9 @@ authority cannot be assigned a public label.
 \subsection{Replaceable analysis under fixed policy}
 \label{sec:analysis}
 
-The analysis runtime supplies a registry, dependency scheduler, canonical store,
-provenance, and scoped query interface. Plugins return findings and restrictive
+The analysis runtime realizes Goal~\ref{goal:extensibility} through a registry,
+dependency scheduler, canonical store, provenance, and scoped query interface.
+Plugins return findings and restrictive
 annotations; the schema rejects policy, rule, and grant fields. Security modules
 interpret that evidence under a configuration fixed before execution. Approval
 cannot override another module's denial.
@@ -490,7 +507,8 @@ callbacks, reducers, caches, and custom nodes require adapters or refusal.
 
 \subsection{Certifying router placement}
 
-The router certificate is a bounded, path-sensitive authorization-state
+For requirement~\ref{req:verifiability}, the router certificate supplies bounded,
+path-sensitive authorization-state
 analysis over Python ASTs. It tracks a successful decision's permission class,
 principal identity, request identity, and single-use dispatch obligation.
 Changed objects, repeated dispatch, unknown calls, unsupported statements, and
@@ -507,7 +525,8 @@ disappear merely because the checker did not certify it.
 
 \subsection{Constructive DAC, restrictive MAC}
 
-A tool profile proposes finite authority. The tool owner and invoking principal
+Goal~\ref{goal:policy} starts with a tool profile proposing finite authority.
+The tool owner and invoking principal
 must both permit each candidate line; explicit shares may contribute delegated
 authority. Undeclared tools receive no resource or caller authority. A required
 \code{need} line that does not survive denies the operation; an optional
@@ -583,7 +602,8 @@ grant check; opening the database directly must fail at the host boundary.
 The operator installs a forbid-only policy during trusted bootstrap, or provisions
 \path{mac.cedar} in the protected deployment policy directory. The runtime loads
 and seals it before execution; there is no public replacement or uninstall API.
-Every object authorization includes these forbids. Graph-local DAC can grant
+Every object authorization includes these forbids, preserving
+Goal~\ref{goal:policy}'s mandatory ceiling. Graph-local DAC can grant
 candidate authority and local forbids can restrict it, but neither can omit the
 operator policy. Controllers retain their boot policy until restart.
 
@@ -597,8 +617,11 @@ load the policy. The controller, callbacks, and installed Python code remain
 trusted; this is not a machine-wide LSM or protection against hostile bootstrap.
 
 \subsection{Restricted in-process admission}
+\label{sec:language}
 
-The high-level Cedar API admits an in-process tool only when supported source
+The language sandbox avoids worker launch for admitted tools
+(Goal~\ref{goal:overhead}). The high-level Cedar API admits an in-process tool
+only when supported source
 analysis establishes $I\subseteq M$ and $I\subseteq A$, where $I$ overapproximates
 its effects, $M$ is its manifest, and $A$ is the approved monitored API vocabulary.
 Unknown calls, direct resource access, reflection, dynamic execution, unsupported
@@ -615,7 +638,8 @@ Untrusted implementations instead require confinement before import.
 \subsection{Extensible semantic resources}
 \label{sec:resources}
 
-A resource class declares operations, object kind, trusted normalizer,
+Resource classes provide the domain extension point for
+Goal~\ref{goal:extensibility}: operations, object kind, trusted normalizer,
 policy-visible attributes, enforcement locus, and lowering adapter. The registry
 generates Cedar actions and entities; a closed manifest map can select among
 declared operations without accepting an action name from the tool. Independent
@@ -629,7 +653,8 @@ request is authenticated to its worker invocation and checked against the
 surviving object, operation, and selector. Unsupported required authority or
 ambiguous adapter ownership denies execution; unsupported optional lines and
 their routes are removed. A handler's existence is not evidence of enforceability. For Alice's read,
-the SQLite mediator supplies the record check only if the host prevents direct
+the SQLite mediator composes the monitors required by Goal~\ref{goal:lowering}:
+it supplies the record check only if the host prevents direct
 database access and the broker channel binds requests to her invocation. Losing
 either dependency makes that required read unsupported.
 
@@ -652,6 +677,7 @@ under mandatory policy. Naming a class \code{internet} does not automatically
 classify every custom resource or disable coordinator networking.
 
 \subsection{Exact grants and conservative lowering}
+\label{sec:lowering}
 
 The immutable grant binds the principal, request, tool artifact, policy version,
 rules, and operator-owned runtime baseline. A rule contains an action, semantic
@@ -670,7 +696,8 @@ records \code{DEGRADED}. This does not certify the complete original grant or
 remove the remaining confinement. The bubblewrap invocation, object-broker, and sealed runtime-MAC paths
 reject such waivers. Static checker waivers are separate review assumptions.
 
-Host capabilities are probed for the selected adapter. The same declared policy
+For Goal~\ref{goal:lowering}, host capabilities are probed for the selected
+adapter. The same declared policy
 can be enforced exactly, conservatively tightened, explicitly degraded on a
 supporting path, or denied on different hosts. A packaged runtime does not
 supply a missing kernel mechanism. No adapter may replace an endpoint rule with
@@ -684,8 +711,10 @@ complete grant-subset claim. \code{INDETERMINATE} is an outcome whose commit or
 termination status cannot be established, not a weaker permission level.
 
 \subsection{Activation receipts}
+\label{sec:activation}
 
-The coordinator creates a nonce and execution context. Before release, each
+To bind Goal~\ref{goal:policy}'s distributed checks, the coordinator creates a
+nonce and execution context. Before release, each
 enforcer returns evidence covering its exact obligations. The receipt binds the
 principal, request, artifact, grant, lowering result, worker identity,
 mechanisms, host capabilities, and expiry. Missing, duplicate, additional,
@@ -698,8 +727,8 @@ where intended authority becomes an enforced execution.
 \section{Linux Enforcement}
 \label{sec:linux}
 
-The implementation retains two low-level Linux executors and adds a
-high-level object-broker worker path. The namespace-free
+The Linux realization of Goal~\ref{goal:lowering} uses two low-level executors
+and a high-level object-broker worker path. The namespace-free
 \code{LandlockSandboxExecutor} uses Landlock for filesystem restrictions,
 seccomp for syscall classes, cgroup v2 or rlimits for resources, and a supervisor
 for lifetime~\cite{landlock,seccomp}. The separate
@@ -768,11 +797,11 @@ separate code-selection contract.
 \section{Security Argument}
 \label{sec:argument}
 
-This is a conditional design argument for an \code{ENFORCED} operation. It
-assumes correct placement, effective-object binding by every downstream
-adapter, and verified host evidence, in addition to the TCB and mechanism
-semantics in Section~\ref{sec:model}. A router certificate alone does not
-discharge those composition assumptions.
+This conditional argument connects requirements~\ref{req:mediation}--\ref{req:tamperproof}
+to Goals~\ref{goal:policy} and~\ref{goal:lowering} for an \code{ENFORCED}
+operation. It assumes the TCB in Section~\ref{sec:model}, correct placement,
+effective-object binding by downstream adapters, and verified host evidence.
+A router certificate alone does not discharge these composition assumptions.
 
 \paragraph{Monotonic-authority invariant.}
 For a fixed principal, candidate, policy version, and relevant context, owner
@@ -807,13 +836,10 @@ own operations; authorization for tool invocation does not authorize them.
 
 Under these assumptions, exact and tightened enforcement support
 Equation~\ref{eq:effect} for the covered routes and host authority domains.
-The application canaries and native-chain checks test instances of effect
-containment; the admission controls test changed bindings and missing manifest
-permissions. The metadata census tests a host capability boundary. These
-experiments do not discharge every inclusion for every resource mediator.
-This subset relation does not guarantee useful execution or successful
-completion. The current component evidence does not establish the assumptions
-for every adapter or upstream path, and is not a whole-system theorem.
+Application canaries, native chains, admission controls, and the metadata census
+test particular boundaries. They do not establish these assumptions for every
+adapter, resource mediator, or upstream path. The subset relation does not
+guarantee useful completion or constitute a whole-system theorem.
 
 \input{sections/evaluation}
 

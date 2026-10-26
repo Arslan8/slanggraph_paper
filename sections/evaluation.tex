@@ -1,9 +1,10 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-We ask whether enforcement constrains effects after a call is authorized, what
-useful work each execution path admits, and what the complete path and its
-components cost. We separate the protected Pandas integration from newer
+We evaluate authority preservation (Goal~\ref{goal:policy}), the work each
+execution path admits (Goal~\ref{goal:lowering}), and complete-path and component
+costs (Goal~\ref{goal:overhead}). Extensibility (Goal~\ref{goal:extensibility})
+currently has mechanism evidence. We separate the protected Pandas integration from newer
 evaluation adapters; their authority, implementation, and timing scopes differ.
 
 \begin{figure*}[t]
@@ -134,8 +135,8 @@ The chain \code{/usr/bin/env} $\rightarrow$ \code{/bin/cat} successfully returns
 an allowed canary in every host timing call, without verifying either binary's
 source. In 15 hidden-file checks per mode, plain execution discloses the canary;
 both host profiles prevent disclosure. Source admission rejects the raw
-subprocess tool. Thus confinement supports useful opaque execution that the
-restricted language path cannot admit. This profile differs from the minimal
+subprocess tool. This demonstrates Goal~\ref{goal:lowering}'s need for a
+confinement path alongside restricted language execution. This profile differs from the minimal
 census: in particular, its Landlock configuration has no process-count quota.
 
 \paragraph{Application utility.}
@@ -150,6 +151,7 @@ baseline adaptations, not protected ports. Their metadata and server/storage
 paths explain why a protected query or client alone is insufficient.
 
 \subsection{Cost of the complete path and its components}
+\label{sec:cost}
 
 \paragraph{Protected application.}
 The earlier complete Pandas replay includes dispatch, execution, synchronous
@@ -174,8 +176,10 @@ this experiment does not mix policy frontends.
 Cedar contributes 13.1--20.6~ms in these runs. Execution/transport contributes
 0.14--0.30~ms in verified mode, 53.92--55.54~ms with Landlock, and
 101.56--103.21~ms in the container. Static admission averages 7.65--9.81~ms
-per tool and is excluded from invocation timing. The lighter path is useful
-when tools fit its admitted API; it does not accept arbitrary Python.
+per tool and is excluded from invocation timing. This supports
+Goal~\ref{goal:overhead} for the admitted constant/read workloads: the language
+path avoids worker launch and transport while retaining Cedar. It does not
+accept arbitrary Python or establish low overhead for every application.
 
 \paragraph{Execution-only ablations.}
 The new Pandas replay runs the original computation and sandbox with explicit
@@ -210,7 +214,8 @@ benefit of such changes.
 
 \subsection{Reference-monitor evidence and remaining scope}
 
-A historical router analysis checks 21 dispatch obligations; Tool API conformance
+For requirement~\ref{req:verifiability}, a historical router analysis checks 21
+dispatch obligations; Tool API conformance
 covers 15,744 cases; a focused router/object/host run passes 151 tests. The current
 source includes typed SQLite/pump mediators and sealed-MAC regression cases.
 These establish component mechanisms, while the complete placement gates retain
@@ -220,6 +225,8 @@ from unavailable-host failures and open composition findings.
 The present evidence supports one protected application computation and finite
 backend workloads. Semantic-mediator ablations, dishonest-manifest/MAC
 composition, host-capability changes, persistent-container reuse, and broader
-protected workloads remain unmeasured on one frozen release.
+protected workloads remain unmeasured on one frozen release. End-to-end reuse
+by an independent requirement producer (Goal~\ref{goal:extensibility}) also
+remains to be evaluated.
 Section~\ref{sec:limitations} states the resulting claim boundaries.
 

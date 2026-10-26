@@ -446,3 +446,34 @@ binds required checks and bypass prevention to execution. Trusted adapters and
 supported-path scope remain explicit. This revision changes no comparison-table
 marks or evaluation measurements. Repetition in the introduction was shortened
 to accommodate the expanded motivation within the body budget.
+
+## Paper structure and explicit design goals (October 26, 2026)
+
+The manuscript now uses this order: Introduction; Background and Threat Model;
+Motivation; Overview; detailed design; Security Argument; Evaluation; Limitations;
+Related Work; Conclusion. The LangGraph execution background and adversary/TCB
+precede the concrete motivation cases. The authority invariant moves into the
+overview, after the requirements it formalizes.
+
+Classical reference-monitor requirements retain EC/ECK grounding and now have
+stable R1-R3 references: complete mediation, tamperproofness, and verifiability.
+The overview separately defines four design goals derived from the introduction
+and motivation. Goal labels resolve to D1-D4, rather than subsection numbers.
+
+| Goal | Derivation | Mechanism references | Evidence boundary |
+| --- | --- | --- | --- |
+| D1: Unified policy across distributed enforcers | Manual policy copies can omit checks or lose a mandatory restriction | Framework dispatch; principal/MAC construction; sealed policy; activation receipts; conditional security argument | Component/canary evidence supports particular paths; no whole-system completion claim |
+| D2: Flexible and faithful lowering | Runtime bodies, companion-process shims, and resource services expose different enforcement boundaries and host capabilities | Semantic mediator dependencies; exact/tightened/unsupported lowering; Linux adapters; conditional security argument | Opaque native-chain utility and backend census are measured; broader shim/service ports and host-change ablations are not |
+| D3: Low enforcement overhead | A runtime read need not pay worker launch/transport if source admission and monitored APIs enforce the permission | Restricted in-process admission; common-authorizer cost comparison | Retains authorization and trusted-setup limits; five constant/read workloads do not establish universally low application overhead |
+| D4: Extensible enforcement | Independent analyses and requirement producers should reuse enforcement | Fixed-policy analysis registry; typed resource classes; adapter contracts | Implemented interfaces and demos, with an independent producer reuse experiment still pending |
+
+The evaluation states which goal each existing experiment addresses and preserves
+all numerical results. Existing complete-path overheads remain visible alongside
+the language-path comparison; no new experiment or broad performance guarantee
+is introduced. Repeated security-model wording was condensed without dropping
+the trusted initialization, unsupported-path, waiver, or conditional-proof limits.
+
+The author-supplied overview figure is pending. The LaTeX source selects
+`figures/overview.pdf` if supplied and otherwise uses the provisional generated
+`figures/architecture.pdf`. The generator does not overwrite the author file.
+README and the submission checklist record this replacement step.

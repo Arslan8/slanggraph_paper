@@ -15,19 +15,39 @@ obligations. Exact, tightened, and unsupported lowering outcomes are explicit.
 Requirement output may be untrusted data. Installed analyzer code, policy engines,
 normalizers, mediators, and bootstrap remain trusted.
 
+The paper proceeds from Introduction to Background and Threat Model, Motivation,
+and Overview, followed by the detailed design. Background introduces LangGraph
+execution and the adversary/TCB before the concrete motivation examples. The
+overview states EC-grounded reference-monitor requirements (R1-R3), additional
+design goals (D1-D4), the authority invariant, and cooperating component roles.
 The introduction retains cited applications, incidents, runtime/companion/MCP
-deployment forms, EC's reference-monitor separation, and Flask's architecture.
-It now leads into the gap with the controlled call-versus-effect canaries.
-The design adds LangGraph background, consistent component roles, a source-backed
-SQLite manifest/policy example, execution-status definitions, and the conditional
-monotonic-authority invariant.
+deployment forms, EC's separation of identification and enforcement, and Flask's
+architecture.
+
+| Design goal | Where the design addresses it | Evaluation scope |
+| --- | --- | --- |
+| D1: Unified policy across distributed enforcers | Shared dispatch, principal/MAC construction, sealed operator policy, and activation bound to the invocation grant | Controlled effect checks and component evidence; full composition remains conditional |
+| D2: Flexible and faithful lowering | Runtime versus native paths, semantic mediators, capability assessment, explicit lowering outcomes, and Linux adapters | Admitted APIs, opaque native chain, and backend census; host-change and broker-composition ablations remain pending |
+| D3: Low enforcement overhead | Language-based admission avoids worker launch/transport for supported tools while retaining authorization | Same-authorizer comparison on five constant/read workloads, complete application costs, and separately labeled execution-only costs |
+| D4: Extensible enforcement | Requirement interface, analysis registry under fixed policy, typed resource classes, and adapter contracts | Implemented mechanisms; end-to-end independent-producer reuse remains unevaluated |
+
+Goal references are stable LaTeX labels, used at the corresponding mechanisms,
+in the security argument, and in evaluation. Low overhead is a design goal, not
+a claim that every workload has low total cost. The language path remains
+limited to admitted source bodies and monitored APIs.
+
+The author will supply the overview figure. Add it as `figures/overview.pdf`;
+the manuscript automatically prefers that file, and the generator does not
+overwrite it. Until then, `figures/architecture.pdf` remains a provisional
+diagram. Review the caption against the supplied figure before submission.
 
 Table 1 credits IsolateGPT's process isolation and FIDES/CaMeL's precise flow
 tracking. slangGraph's IFC cell is a half circle for instrumented/coarse coverage.
 Related work also covers Conseca, AgentSpec, Capsicum, gVisor, and Firecracker.
 APF receives credit for programmable grants, mandatory forbids, and extensible
 policy projection. Its documented bundle-load projection is distinguished from
-invocation-specific semantic/host obligations. No APF bypass is claimed.
+invocation-specific semantic/host obligations. The motivation uses APF's
+documented missing-middleware-route condition, not a reproduced APF exploit.
 
 ## Evidence and reproducibility
 

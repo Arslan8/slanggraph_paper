@@ -1,5 +1,17 @@
 # Submission evidence checklist
 
+## Structure and design-goal traceability
+
+- [x] Put Background and Threat Model before Motivation, followed by Overview.
+- [x] Separate R1-R3 reference-monitor requirements from D1-D4 design goals:
+      unified policy/distributed enforcement, flexible faithful lowering,
+      low overhead through language-based admission, and extensibility.
+- [x] Refer to the goals at the relevant design mechanisms and in evaluation.
+- [x] Bound the low-overhead claim to the measured admitted workloads and retain
+      complete-path costs and unsupported-language cases.
+- [ ] Replace the provisional architecture with the author's supplied figure at
+      `figures/overview.pdf`, check its caption and goal mapping, and rebuild.
+
 
 ## Latest alternative-backend update (October 26, 2026)
 
