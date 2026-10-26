@@ -1,0 +1,107 @@
+\section{Application Study Details}
+\label{app:application-details}
+
+The application study uses WIP \code{40e24e9} plus recorded working-tree changes.
+Each integrated run checks a frozen source inventory; reproduction requires the
+associated source archive and per-file hashes. The Pandas and SQL upstream pin
+is \code{4ffeb7f38178}; Open Notebook is \code{a0f6f3081ae0}. Environment freezes,
+model digests, policy and manifest hashes, commands, and attempt IDs distinguish
+the cohorts. Table~\ref{tab:study-host} gives the measured host configuration.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+Component & Configuration \\
+\midrule
+CPU / memory & Intel Xeon w5-3435X; 1 socket, 16 cores, 32 logical CPUs; 62.25~GiB OS-visible RAM \\
+GPUs & Two NVIDIA RTX A4000, 16,376~MiB each; driver 580.178.04; sharding not measured \\
+OS / Python & Ubuntu 24.04.5 LTS; Linux 6.17.0-1033-oem, x86-64; Python 3.13.11 for Pandas/SQL, 3.12.3 for Notebook \\
+Model serving & Ollama 0.32.14, local HTTP endpoint; application and children pinned to CPU~0, server separate \\
+Pandas / SQL model & Qwen3-8B Q4\_K\_M; temperature 0; requested seed 20261005; reasoning disabled; no client retries \\
+Repeated-run residency & 9,969,650,892 bytes reported VRAM; 32,768-token context observed only in the repetition cohort \\
+Notebook model & Local \code{llama3:latest}; temperature 1.0, top-$p$ 0.9, maximum 8,192 output tokens \\
+Confinement & bubblewrap 0.9.0, namespaces, libseccomp; activation receipts retained \\
+Audit / evidence storage & \code{/data}, ext4 on \code{/dev/sda2}; rotating ST12000NM000J disk \\
+Timing conditions & Initial load averages 0.23/0.21/0.41; nonexclusive host, unfixed CPU frequency, caches not flushed \\
+\bottomrule
+\end{tabularx}
+\caption{Measured application-study environment. Full model and source identities
+are retained with the study records. This host does not describe historical
+component benchmarks.}
+\label{tab:study-host}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{llXX}
+\toprule
+Application & Upstream revision & Reproduced scope & Protected status or blocker \\
+\midrule
+Pandas Data Analyst & \code{4ffeb7f38178} & Bundled analysis backend & Experimental A/B/C integration \\
+SQL Database Agent & \code{4ffeb7f38178} & Bundled backend; 3/3 clean tasks & Query and schema-sampling mediation incomplete \\
+Open Notebook & \code{a0f6f3081ae0} & Native ingestion and source chat; 1/1 smoke & Source/storage enforcement and server tracing incomplete \\
+Executive AI Assistant & \code{758db7174223} & No completed smoke & Archived; yanked dependencies and no dedicated Gmail test account \\
+Open Deep Research & \code{1b7d2e80db9f} & No completed smoke & Archived; search resources and structured-output smoke unconfigured \\
+Open SWE & \code{ff4e713c094c} & No completed smoke & GitHub/MDA resources and remote-host instrumentation missing \\
+GPT Newspaper & \code{1c447b5672dd} & No completed smoke & Search access or a contract-preserving fixture service missing \\
+AI Hedge Fund & \code{6c41ae8cf5fb} & Historical LangGraph revision; smoke unverified & Provider fixtures and local execution incomplete; no trading \\
+\bottomrule
+\end{tabularx}
+\caption{Fixed application shortlist: eight applications from seven repositories.
+Pandas and SQL share a repository. Only Pandas has protected execution evidence;
+installation and subagents are not additional ports.}
+\label{tab:application-status}
+\end{table*}
+
+\paragraph{Port scope.}
+The Pandas computation normally runs inside graph nodes through
+\code{run\_code\_sandboxed\_subprocess}. C executes the unmodified sandbox program
+inside its already-fresh worker. It retains upstream checks rather than claiming
+unchanged dispatch plumbing. SQL invokes \code{SQLDatabaseAgent.ainvoke\_agent}
+on a recreated fixture and checks both query results and database state.
+Notebook persists two synthetic source collections and checks an answer for the
+authorized fixture fact through its native \code{source\_chat\_graph}. It uses
+the native Ollama provider, ingestion worker, and dedicated SurrealDB, whose
+image digest is recorded in the manifest. Frontend behavior, embeddings, and
+vector search are excluded.
+
+\paragraph{Security denominators and observation.}
+The original Pandas cohort has nine clean executions and 15 controlled-effect
+executions, including the separately recorded dataset-overwrite amendment.
+The later cohort has 15 clean and 15 attacked executions with fresh attempt IDs.
+Its first launch batch has 30 pre-inference infrastructure failures, retained
+separately. We do not count those failures as prevention or pool clean workloads.
+The frozen CSV-cell attack is not retuned after its zero-attempt outcome.
+Observer files lie outside worker write permissions, but the parent and arbitrary
+baseline code share a host UID. The observer is not tamperproof against a
+malicious parent. Model-judged quality is not used as the security oracle.
+
+\paragraph{Additional timing statistics.}
+Local-replay variances for A/B/C are 46.80, 993.96, and 1,844.46~ms$^2$.
+Full-workflow variances are 1.989, 0.038, and 0.014~s$^2$, with ranges
+11.986--15.293, 12.437--12.979, and 15.243--15.543~s. The paired differences
+and SDs in Section~\ref{sec:evaluation} are reported from the study; paired SDs
+cannot be reconstructed from marginal summaries alone. The 20-call audit
+diagnostic remains separate from the 100-call replay cohort.
+
+First-use call latencies are 283.26/525.81/949.87~ms for A/B/C. Adapter
+initialization costs are 0.05/231.62/344.96~ms after 1,121.86~ms of shared imports.
+Each is a single observation with uncontrolled page-cache state, not a disk-cold
+estimate. Every measured C call still launches a fresh worker.
+
+\paragraph{Reproduction records.}
+The study names \path{eval/apps.csv} and \path{eval/APPLICATIONS.md} as its intake
+and setup records. The scripts \path{eval/scripts/pandas_runtime.py},
+\path{pandas_dispatch.py}, and \path{pandas_e2e_repetitions.py} run the replay,
+dispatch checks, and model-driven repetitions. Replay parameters are
+\code{--warmup 10 --samples 100}; the audit diagnostic uses two warm-ups and
+20 samples. Commands use the pinned upstream environment and fresh output paths.
+The reports \path{macro-metrics.json} and \path{application-pilot.md} identify
+derived statistics, controlled effects, and the oracle correction. The result
+directories distinguish the runtime, audit-profile, dispatch, failed-launch,
+and retry cohorts. These records and the exact implementation overlay must
+accompany the anonymous artifact; a source commit by itself cannot reproduce
+the application study.

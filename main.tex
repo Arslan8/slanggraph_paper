@@ -32,9 +32,11 @@ analysis interface supplies findings and provenance to fixed policies, allowing
 new analyses to reuse the enforcement infrastructure. \sys implements this
 separation with runtime-wide mandatory restrictions, typed pump and SQLite
 mediators, host-dependent lowering, and checks on instrumented data flows.
-Eight executable canaries demonstrate the gap between call authorization and
-tool effects. Our evaluation combines bounded router verification, Linux
-integration evidence, and a recorded 13.2\% overhead for policy-only mediation.
+In an existing data-analysis application, authorization alone permits three
+tested forbidden filesystem effects; host enforcement prevents all three while
+preserving the intended computation. Replaying that computation costs 267~ms
+upstream and 931~ms with enforcement, identifying synchronous audit persistence
+as a major source of overhead.
 \sys provides a common enforcement foundation on which independently developed
 agent-security analyses and policies can build.
 \end{abstract}
@@ -157,7 +159,8 @@ Our contributions are:
   sealed runtime MAC, and provenance-aware policy hooks in LangGraph.
   \item \textbf{An implementation and evaluation.} We instantiate the framework
   with pump and SQLite mediators and fixed-policy analysis modules, and evaluate
-  effect-gap canaries, router obligations, host enforcement, and policy overhead.
+  application effect containment, utility, integration requirements, and runtime
+  cost, alongside component-level reference-monitor checks.
 \end{itemize}
 
 \section{Motivation}
@@ -757,161 +760,7 @@ This subset relation does not guarantee useful execution or successful
 completion. The current component evidence does not establish the assumptions
 for every adapter or upstream path, and is not a whole-system theorem.
 
-\section{Evaluation}
-\label{sec:evaluation}
-
-We ask three questions:
-
-\begin{itemize}
-  \item \textbf{RQ1:} Does the effect gap arise in executable agent tools?
-  \item \textbf{RQ2:} What portion of the layered boundary has concrete
-  implementation evidence, and what remains open?
-  \item \textbf{RQ3:} What is the cost of framework policy mediation?
-\end{itemize}
-
-The implementation is based on LangGraph 1.2.12. The current design
-baseline is WIP \code{40e24e9}. Earlier component evidence was
-recorded against \code{53c5d317} and other snapshots; each experiment retains its revision,
-hardware, and dependency identities. We separate dynamic canaries, bounded
-source certificates, API conformance, kernel integration, and projections. No
-projection is reported as runtime blocking evidence.
-
-\subsection{RQ1: Executable effect-gap canaries}
-
-We built eight deliberately vulnerable tools: file read, file write, shell,
-SQL, fetch, email, Slack, and delegation. Each receives a policy-conformant call
-but resolves or expands authority below the checked interface. Calls were
-generated once by local Qwen3-8B at temperature zero and replayed identically.
-Experiments use temporary directories, synthetic records, and loopback services;
-no third-party deployment is attacked.
-
-All eight unauthorized sinks were reached with no defense and after Progent
-approved the policy-conformant calls. The same eight were reached behind each of
-three tested generic LangChain wrappers (Eydii, Forge, and Nuggets). Here Forge
-is the pinned \code{langchain-forge} 0.2.0 distribution, not the separately
-reviewed FORGE/SASY framework in Table~\ref{tab:features}. This result
-does not show that their call policies are incorrect. It demonstrates precisely
-the distinction in Equation~\ref{eq:effect}: approving the request does not
-confine its implementation.
-
-CaMeL addresses a stronger data-flow model. Under a generous assumption that all
-relevant values remain untrusted-tagged, our static model marks all eight paths
-covered. We separately reproduced one narrower post-validation case in which a
-value trusted at the policy boundary became an absolute path during resolution.
-That 1/1 result is not a general bypass claim against CaMeL.
-
-\subsection{RQ2: Evidence and open coverage}
-
-Table~\ref{tab:evidence} reports evidence at each layer. The router analyzer
-discovers entries independently of the admission catalog and verifies all 21
-catalogued obligations at the recorded snapshot under its documented contracts. The Tool API verifier
-passes 15,744 cases across inherited execution surfaces and adapters. A recorded
-focused run of router, object-manager, layered-verification, Landlock, and Linux
-execution tests passes all 151 cases (4 warnings) in 15.84 seconds. These
-recorded totals are not a newly executed release gate.
-
-\begin{table*}[t]
-\centering
-\small
-\begin{tabularx}{\textwidth}{lXl}
-\toprule
-Layer & Evidence & Interpretation \\
-\midrule
-Router & 21 discovered, 21 obligated, 21 verified dispatch entries & Historical catalog and checker contracts \\
-Tool API & 15,744 conformance cases & Passing inherited-surface inventory \\
-Framework objects & Refusing entries and sync/async tests for dispatch, registry, state/store, checkpoint, model, output, approval & Partial automatic placement \\
-Linux host & Descriptor-bound Landlock, raw syscall, descendant, magic-link, seccomp, activation, and resource-control tests & Implemented host subset \\
-Deployments & Tool/runtime commit binding, checkout validation, invocation references, and leases & Bubblewrap path; lifecycle validation remains \\
-Resources & Typed pump, SQLite record, and custom mediator implementations & WIP implementation; comparative host experiments pending \\
-\bottomrule
-\end{tabularx}
-\caption{Evidence is reported per layer. Passing a component does not establish
-whole-framework complete mediation.}
-\label{tab:evidence}
-\end{table*}
-
-Implementation review organized composition risk into six categories: binding
-adapter effects to the effective authorized object; rerunning object DAC on
-approval resume; covering every framework-supported value shape; partitioning
-authoritative state and preserving labels; mediating every publication and
-checkpoint API; and establishing process isolation plus authenticated object RPC
-for untrusted nodes. The focused run includes regression tests for effective
-store objects, resume reauthorization, and principal/session state partitioning.
-Automatic coverage of every value, publication, checkpoint, and dispatch path,
-plus an authenticated untrusted-node host, remains open. These are not cosmetic
-TODOs: each is a route by which component-correct enforcement could fail to
-compose.
-
-The earlier source review recorded four implementation diagnostics: synchronous
-and asynchronous backing-store reads publish values without effective-value
-mediation (\code{SGV107}), and checkpoint-history enumeration publishes tuples
-without per-tuple envelope and principal/session authentication (\code{SGV108}).
-These are source-review findings, not executed bypass demonstrations. Separate
-\code{SGV901}--\code{SGV903} obligations remain for placement, adapter
-composition, and host/isolation composition. Those recorded default and
-compatibility completeness gates failed despite the passing router certificate
-and API matrix. These findings require a fresh report tied to the evaluation
-revision before submission.
-
-\paragraph{New resource, MAC, and analysis paths.}
-The WIP tree contains pump, SQLite record, custom-mediator, and no-internet MAC
-demonstrations. Runtime-MAC regression tests cover precompiled graphs, unsecured
-ToolNodes, local trust promotion, raw Pregel, remote execution, wrappers, and
-policy installation. These source artifacts establish implementation coverage,
-not a newly executed end-to-end comparison.
-
-The checked-in analysis validation record reports 42 analysis tests and 123
-security regressions passing. Its full prebuilt run reports 3,701 passed,
-58 failed, and four skipped; the failures report unavailable bubblewrap user
-namespace isolation. That environment did not validate those host paths. These
-results are separate from the historical totals above.
-
-Offline fixtures report one ledger insertion for a baseline attack, zero for
-the detected attack under fixed policy, and one for the benign control. A
-deliberately missed attack still inserts a row. A flow fixture denies public
-model submission and allows a cleared destination for the same secret-derived
-value. These bounded demonstrations establish policy integration, not classifier
-soundness, broad attack resistance, or reproduction of Progent or CaMeL.
-
-\paragraph{Deployment evidence.}
-The checked-in deployment regression suite uses a fake OSTree command, including
-tests that subsequently invoke a real sandbox and may skip without host support.
-A separate development record reports real OSTree 2024.5 and bubblewrap on
-October 18, 2026: tool A/B identity, runtime selection A/B/A across a channel move,
-SQLite checkpoint restart, signed-commit acceptance, and unsigned-commit
-rejection. That record is distinct from a reproducible checked-in real-OSTree
-integration run. The record reports mean latency over five post-warmup
-invocations per path: 142.575~ms for the legacy secured path and 209.780~ms with
-tool deployment. These observations do not measure
-Landlock or establish general performance. Real object pruning and the lifecycle
-cases in Section~\ref{sec:deployments} remain required experiments.
-
-An earlier frozen Linux milestone passed the complete 518-test prebuilt command
-and 55 focused tests. We retain those results as historical compatibility
-evidence, not as measurements of the current Landlock backend. Released-artifact
-validation also passes CaMeL's 126 tests and three Progent checker-parity cases;
-those validate our harness, not comparative security.
-
-\subsection{RQ3: Policy-path overhead}
-
-Matched \code{pytest-benchmark} cases invoke one no-op tool through a complete
-synchronous \code{ToolNode}. The disabled-security median is 593.701~$\mu$s.
-Capability-only mediation is 672.212~$\mu$s, a 13.2\% increase; five no-op
-modules are 884.800~$\mu$s, a 49.0\% increase. Figure~\ref{fig:perf} shows the
-relative cost.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{figures/overhead.pdf}
-  \caption{Recorded in-process policy-path overhead. These measurements do not
-  include the current fresh-worker Landlock path.}
-  \label{fig:perf}
-\end{figure}
-
-The absolute increments are 78.511~$\mu$s and 291.099~$\mu$s. These results
-isolate policy composition, not end-to-end confinement. We deliberately do not
-extrapolate fresh-worker latency from them; that experiment remains required on
-the release revision.
+\input{sections/evaluation}
 
 \section{Limitations}
 \label{sec:limitations}
@@ -960,9 +809,12 @@ and has regression tests, not a machine-checked soundness proof. Landlock
 constrains access to live objects; it does not provide snapshot integrity.
 
 \paragraph{Evaluation is not yet complete.}
-The canary suite is small and synthetic. Dynamic \sys rows for AgentDojo,
-InjecAgent, and ASB, comparative resource-broker experiments, and fresh-worker latency remain
-necessary before making broad utility or deployment claims.
+The application study has one protected integration and an initial three-task
+workload with unresolved utility failures. Its model-driven payload produces
+no forbidden attempts. Broader workloads, comparative resource-broker and
+flow-policy experiments, runtime-MAC composition, and host-capability degradation
+remain necessary. The measured bubblewrap cost does not characterize Landlock
+or every application.
 
 \section{Related Work}
 
@@ -1044,7 +896,8 @@ defenses without rebuilding that infrastructure for each analysis.
 
 The anonymous artifact will include the LangGraph fork, policy manifests,
 router and Tool API verifiers, Linux integration tests, canary tools, frozen
-model transcripts, audit databases, generated figures, and commands for every
+model transcripts, audit databases, application adapters, frozen source overlays,
+attempt ledgers, raw timing samples, generated figures, and commands for every
 reported result. Machine-readable reports distinguish measurements,
 certificates under contracts, projections, and pending work. At submission this
 section will include a history-free, non-tracking artifact URL.
@@ -1062,6 +915,10 @@ stamping waivers as degraded, publishing the protected-operation inventory, and
 separating component evidence from system claims. Operators remain responsible
 for policy correctness, TCB maintenance, user notice, and recovery from
 \code{INDETERMINATE} operations.
+
+\input{sections/evaluation_appendix}
+
+\input{sections/component_evidence}
 
 \section{Artifact Claim Map}
 
@@ -1090,7 +947,11 @@ for policy correctness, TCB maintenance, user notice, and recovery from
   \path{docs/security/developer-verification-report.json}.
   \item Effect-gap canaries: \path{eval/reports/e2/}; static traces:
   \path{eval/reports/e1/exposure.json}.
-  \item Policy overhead: \path{libs/prebuilt/benchmarks/}.
+  \item Application evaluation: \path{eval/apps.csv},
+  \path{eval/APPLICATIONS.md}, the Pandas scripts under \path{eval/scripts/},
+  and the separately identified cohorts under \path{eval/results/}.
+  The source archive and working-tree hashes are required in addition to the WIP pin.
+  \item Historical policy overhead: \path{libs/prebuilt/benchmarks/}.
   \item Reproducibility identities: \path{eval/HARDWARE.md} and
   \path{eval/PINS.md}.
 \end{itemize}

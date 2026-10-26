@@ -19,6 +19,26 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   passed; full prebuilt run 3,701 passed, 58 host-unavailable failures, four skipped.
   This revision of the paper did not rerun those implementation tests.
 
+## Application evidence incorporated
+
+- The supplied report is archived in `evidence/application_macrobenchmarks_source.md`.
+  Its experiments use WIP plus a frozen working-tree overlay. This editorial
+  revision did not rerun the experiments or inspect the referenced raw samples.
+- Eight applications screened from seven repositories; three local baselines
+  from two repositories; only Pandas has a protected computation integration.
+- A/B/C separates the upstream subprocess sandbox, added authorization, and
+  authorization plus the bubblewrap executor. It is not a Landlock evaluation.
+- The three supported forbidden probes succeed in A/B and are prevented in C;
+  all 15 controlled-effect runs retain the legitimate result. Private `/tmp`
+  writes are permitted, so a strict output-only guest-write policy is unsupported.
+- Deterministic dispatch: 4/4 checks in B and C. One fixed model-driven injection:
+  zero forbidden attempts in every configuration, not enforcement success.
+- Initial utility: 1/3 tasks in every configuration. Later selected-task repeats:
+  5/5 per configuration. Do not pool these cohorts.
+- Replay: 100 measured calls each, means 267.19/545.54/930.93 ms; separate
+  20-call audit diagnostic identifies synchronous persistence cost. Five-run
+  workflow means are 12.777/12.725/15.354 s, including runner and tracing costs.
+
 ## Historical evidence retained
 
 - Earlier layered reference-monitor evidence at revision `53c5d317`, including the
@@ -46,6 +66,23 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   (49.0% overhead).
 
 ## Required before submission
+
+- Add the application study's exact source archive, working-tree hashes,
+  manifests, policies, environment freezes, model digests, scripts, and raw
+  samples to the reproducible artifact. The named application records are not
+  in the reviewed public WIP tree; the source commit alone is insufficient.
+- Recompute application statistics from raw traces, preserve the failed launch
+  cohort and corrected outside-fixture-write oracle, and link each table cell
+  to its run IDs. Keep replay, audit diagnostic, workflow, and startup scopes
+  separate. Do not reconstruct paired SDs or box plots from marginal summaries.
+- Expand beyond one protected computation and the known-working February task:
+  complete the frozen multi-task workload, resolve the initial utility failures,
+  probe additional adversarial channels and host-capability degradation, and
+  mediate SQL query/metadata and Notebook server/storage paths before counting
+  them as protected ports. Add across-task uncertainty once tasks are available.
+- Profile or optimize synchronous audit persistence while preserving its
+  security/durability contract, then rerun the matched replay. No SSD speedup or
+  negligible enforcement overhead follows from the current evidence.
 
 - Create a claim ledger mapping each manuscript claim to a source revision,
   symbol or result file, backend, command, evidence type, and remaining

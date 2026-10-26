@@ -23,12 +23,25 @@ process confinement, and flow policies need a shared invocation-grant contract;
 it then identifies the independent analysis and resource extension interfaces.
 Trust assumptions and coverage limits remain in the security model and evaluation.
 
-Historical canaries, router/API certificates, Linux tests, and benchmark medians
-retain their original source snapshots. They are not measurements of the latest
-analysis runtime or object broker. The analysis validation record is reported
-separately, including its unavailable-host failures. See
-`SUBMISSION_CHECKLIST.md` for evidence still required. The plotted performance
-medians remain historical hard-coded data, not a fresh experiment.
+The evaluation now centers on the supplied application study: one protected
+Pandas computation integration, with SQL and Open Notebook baseline reproductions.
+It compares the original subprocess sandbox, added authorization, and authorization
+plus the bubblewrap executor. It separates controlled effects, deterministic
+dispatch checks, model-driven injections, utility, 100-call computation replays,
+a 20-call audit diagnostic, and five-run workflow observations.
+
+The application source is WIP plus an archived working-tree overlay, not the WIP
+commit alone. `evidence/application_macrobenchmarks_source.md` preserves the
+supplied report byte-for-byte. Its raw samples, scripts, and source archive are
+referenced by that report but are not included in this paper repository or present
+at the reviewed WIP commit. No application experiment was rerun during this edit.
+
+`sections/evaluation.tex` contains the main study, while
+`sections/evaluation_appendix.tex` holds environment and reproduction details.
+Historical canaries, router/API checks, Linux tests, and policy-only measurements
+remain in `sections/component_evidence.tex` with their original snapshots.
+The policy-overhead figure is historical, not the source of the application
+timings. See `SUBMISSION_CHECKLIST.md` for remaining evidence requirements.
 
 The low-level Landlock executor, object-broker worker, and deployment-backed
 bubblewrap executor have different integration coverage. Do not transfer

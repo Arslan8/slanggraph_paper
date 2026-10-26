@@ -125,3 +125,51 @@ Sources checked:
 - [EC, IEEE S&P 2023, Sections VI-B and VI-C](https://www.cs.purdue.edu/homes/dxu/pubs/SP23_EC.pdf).
 - [Anderson, Computer Security Technology Planning Study, Volume II, Sections 3.4 and 4.1.1](https://csrc.nist.gov/files/pubs/conference/1998/10/08/proceedings-of-the-21st-nissc-1998/final/docs/early-cs-papers/ande72.pdf).
 - [Jaeger, Reference Monitor, 2011](https://doi.org/10.1007/978-1-4419-5906-5_646).
+
+## Application evaluation revision
+
+The supplied application report is preserved byte-for-byte at
+`evidence/application_macrobenchmarks_source.md` (SHA-256
+`2126874e8a11cdddcdd8ac5125197788d6f21e7559f77d6567e3f9dc343afd7c`).
+The source states WIP `40e24e9` plus working-tree modifications. The public WIP
+tree does not contain the named application scripts/results or that source
+archive. This manuscript revision transcribes the reported evidence; it does not
+claim independent execution or raw-sample verification. The referenced archive,
+hashes, policies, traces, and samples remain artifact-delivery requirements.
+
+The main evaluation now answers containment, utility/integration, and runtime
+questions through the Pandas A/B/C study. The prior component evaluation remains
+in an appendix, with a short main-text synthesis. Abstract and limitations now
+reflect the application results rather than presenting the historical 13.2%
+policy-only result as the main performance finding.
+
+Interpretation constraints preserved:
+
+- Eight applications were screened, three baselines reproduced, one protected
+  computation integration completed. Pandas and SQL share a repository.
+- A keeps the upstream subprocess sandbox on the shared overlay; B adds a
+  dispatch boundary; C adds the bubblewrap executor. This is not a native
+  tool-dispatch ablation, a published-defense reproduction, or a Landlock result.
+- Forbidden effects are reached in 3/3 supported probes in A/B and 0/3 in C.
+  All 15 controlled-effect executions return the intended result. Private `/tmp`
+  writes are allowed and excluded from that denominator; host containment does
+  not establish output-directory-only guest writes.
+- The initial three-task clean workload is 1/3 in every configuration. Later 5/5
+  repeats select the known-working task and are not pooled with the original
+  workload. The model-driven attack has zero eligible forbidden attempts in all
+  configurations. Infrastructure failures are retained as a separate cohort.
+- The 100-call replay, 20-call audit diagnostic, five-run workflow cohort, and
+  single-observation startup values have distinct scopes. Paired SDs are taken
+  from the supplied report, not reconstructed from marginal summaries.
+- No box plot or distribution was synthesized from aggregate statistics. The
+  attachment references runtime images and raw samples that were not attached;
+  the manuscript uses tables of the reported aggregates.
+- New application citations identify upstream sources and revisions. Their
+  commit identities were checked through GitHub, not used as evidence for
+  experiments performed on the unavailable overlay.
+
+Arithmetic checks confirm the reported mean differences and rounded ratios:
+278.35 ms B-A, 663.74 ms C-A, 385.39 ms C-B; C/A = 3.48 in replay;
+2.577 s C-A and 20.2% in the recorded full workflow; audit writes account for
+98.1% of the diagnostic B remainder. No new performance/security result is
+claimed from editing or building the paper.
