@@ -335,3 +335,74 @@ forbids and host adapters, CaMeL for its interpreter, and nono/Sandlock for proc
 confinement. The gap is the shared invocation-grant contract across semantic
 resources, framework operations, and host execution, not the invention of policy
 composition or capability lowering themselves.
+
+## Review and alternative-backend revision (October 26, 2026)
+
+The public WIP head was rechecked and remains `40e24e978f9ec2e8f061abb21077e2251583f5e5`.
+The paper branch before this revision was `551c24322f6f3b1da943b8692cc9d49dae2bc3dc`.
+
+Accepted writing feedback:
+- Center the novelty on untrusted requirement proposals, trusted authorization
+  capped by sealed MAC, explicit lowering fidelity, and semantic/host composition.
+- Add LangGraph background and consistent router/authorizer/coordinator/object
+  manager/dispatcher/broker/mediator roles.
+- Carry Alice's record through a real manifest and Cedar policy excerpt. The
+  projected grant and obligations are a readable walkthrough, explicitly not a
+  fabricated serialized grant or observed receipt.
+- Scope complete mediation to admitted deployments, retain missing protected
+  routes as failures, and give a short conditional monotonic-authority argument.
+- Bring executable call-versus-effect canaries into the main evaluation. Keep
+  their old revision and distinguish langchain-forge from FORGE/SASY.
+- Replace the low-information effects graph with concise counts and add measured
+  common-authorizer, execution-only, and opaque-chain cost graphs.
+- Move historical component detail and source identities out of the body, reduce
+  repetitive deployment discussion, and use Times-compatible figure text.
+
+Refinements to the feedback:
+- Untrusted producer output does not imply untrusted privileged analyzer code.
+- APF already has enforcement, MAC-like forbids, and extensible projectors. We do
+  not presume a widening failure. The new delta is invocation-derived authority
+  shared with semantic and host enforcers, not varying lowering by itself.
+- The new common-authorizer comparison removes the old frontend mismatch.
+  Evaluation adapters still cannot inherit production executor receipt claims.
+- Keep relative costs alongside absolute costs. The execution-only +0.34% point
+  estimate is not complete-framework overhead; its paired interval includes zero.
+- Preserve the observed Landlock metadata case rather than writing 0/49 for all
+  host modes. The new census has 132 explicit-denial trials per adapter, not the
+  historical 135.
+- Keep essential scope qualifications beside counts. No finite experiment proves
+  the universal grant-subset invariant.
+- Do not invent a live anonymous artifact, new application port, semantic-broker
+  ablation, or external-producer experiment while those inputs are pending.
+
+Added primary sources:
+- Progent v3: https://arxiv.org/abs/2504.11703v3
+- CaMeL v2: https://arxiv.org/abs/2503.18813v2
+- FORGE/SASY v4 and the source-linked paper:
+  https://arxiv.org/abs/2602.16708v4
+- FIDES v2: https://arxiv.org/abs/2505.23643v2
+- IsolateGPT: https://www.ndss-symposium.org/wp-content/uploads/2025-1131-paper.pdf
+  Appendix A explicitly documents process isolation, seccomp/rlimits, and user
+  permission mediation. It receives host-confinement credit in Table 1.
+- Conseca: https://arxiv.org/abs/2501.17070v3
+- AgentSpec: https://arxiv.org/abs/2503.18666v3
+- APF projection: https://docs.nvidia.com/agent-policy-fabric/how-it-works/policy-projection
+  The documented lowering occurs at bundle load; runtime requests fetch the
+  resulting surfaces. Extensibility is credited.
+- LangGraph graph API, Pregel runtime, and persistence: official LangChain docs.
+- Capsicum (USENIX Security 2010), Firecracker (NSDI 2020), and the official gVisor
+  security model establish complementary confinement mechanisms.
+
+The two latest evaluation uploads are byte-identical. They are archived once as
+`evidence/alternative_backends_source.md`, SHA-256
+`a4068963b3ebb56c84ec7ce25cc77155989fec812cbdf2033d95a64bd595aa8f`.
+The new JSON contains 69 timing rows plus reported stage, admission, lifecycle,
+security, and operation-body aggregates. CI bounds are copied from the report,
+not synthesized from SDs. Ratios are derived from rounded means. New counts and
+old cohorts remain distinct. The report's verified-control denominator ambiguity
+is explicit in the appendix; no invented case/trial total is used in the body.
+
+No framework experiment was rerun. Raw cohort archives remain unavailable in
+the reviewed paper repository. The student's additional evaluation is still
+needed to substantiate semantic mediation, MAC composition, host changes,
+container reuse, and broader application utility.

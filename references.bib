@@ -177,9 +177,9 @@
 
 @article{progent,
   author = {Tianneng Shi and Jingxuan He and Zhun Wang and Hongwei Li and Linyu Wu and Wenbo Guo and Dawn Song},
-  title = {Progent: Programmable Privilege Control for {LLM} Agents},
-  journal = {arXiv preprint arXiv:2504.11703},
-  year = {2025},
+  title = {Progent: Securing {AI} Agents with Privilege Control},
+  journal = {arXiv preprint arXiv:2504.11703v3},
+  year = {2026},
   url = {https://arxiv.org/abs/2504.11703}
 }
 
@@ -320,7 +320,7 @@
 }
 
 @misc{progentcode,
-  author = {{Progent Authors}},
+  author = {Tianneng Shi and Jingxuan He and Zhun Wang and Hongwei Li and Linyu Wu and Wenbo Guo and Dawn Song},
   title = {Progent Tool-Call Proxy Implementation},
   year = {2026},
   howpublished = {Source, revision 07eb844},
@@ -329,7 +329,7 @@
 }
 
 @misc{camelcode,
-  author = {{CaMeL Authors}},
+  author = {Edoardo Debenedetti and Ilia Shumailov and Tianqi Fan and Jamie Hayes and Nicholas Carlini and Daniel Fabian and Christoph Kern and Chongyang Shi and Andreas Terzis and Florian Tram{\`e}r},
   title = {{CaMeL} Interpreter and Native Tool Adapter},
   year = {2026},
   howpublished = {Source, revision f083b6b},
@@ -338,7 +338,7 @@
 }
 
 @misc{forgecode,
-  author = {{SASY Authors}},
+  author = {Nils Palumbo and Sarthak Choudhary and Jihye Choi and Guy Amir and Prasad Chalasani and Isil Dillig and Somesh Jha},
   title = {{FORGE}: Reference Monitor and LangChain Instrumentation},
   year = {2026},
   howpublished = {SASY source, revision 7dc9e52},
@@ -353,3 +353,103 @@
   url = {https://www.openpolicyagent.org/docs/agent-tool-calling},
   note = {Accessed October 25, 2026}
 }
+
+@article{forge,
+  author = {Nils Palumbo and Sarthak Choudhary and Jihye Choi and Guy Amir and Prasad Chalasani and Isil Dillig and Somesh Jha},
+  title = {Formal Policy Enforcement for Agentic Systems},
+  journal = {arXiv preprint arXiv:2602.16708v4},
+  year = {2026},
+  url = {https://arxiv.org/abs/2602.16708v4}
+}
+
+@inproceedings{isolategpt,
+  author = {Yuhao Wu and Franziska Roesner and Tadayoshi Kohno and Ning Zhang and Umar Iqbal},
+  title = {{IsolateGPT}: An Execution Isolation Architecture for {LLM}-Based Agentic Systems},
+  booktitle = {Network and Distributed System Security Symposium (NDSS)},
+  year = {2025},
+  url = {https://www.ndss-symposium.org/wp-content/uploads/2025-1131-paper.pdf}
+}
+
+@article{fides,
+  author = {Manuel Costa and Boris K{\"o}pf and Aashish Kolluri and Andrew Paverd and Mark Russinovich and Ahmed Salem and Shruti Tople and Lukas Wutschitz and Santiago Zanella-B{\'e}guelin},
+  title = {Securing {AI} Agents with Information-Flow Control},
+  journal = {arXiv preprint arXiv:2505.23643v2},
+  year = {2025},
+  url = {https://arxiv.org/abs/2505.23643v2}
+}
+
+@inproceedings{conseca,
+  author = {Lillian Tsai and Eugene Bagdasarian},
+  title = {Contextual Agent Security: A Policy for Every Purpose},
+  booktitle = {Workshop on Hot Topics in Operating Systems (HotOS)},
+  year = {2025},
+  doi = {10.1145/3713082.3730378},
+  url = {https://arxiv.org/abs/2501.17070v3}
+}
+
+@inproceedings{agentspec,
+  author = {Haoyu Wang and Christopher M. Poskitt and Jun Sun},
+  title = {{AgentSpec}: Customizable Runtime Enforcement for Safe and Reliable {LLM} Agents},
+  booktitle = {48th IEEE/ACM International Conference on Software Engineering (ICSE)},
+  year = {2026},
+  pages = {2938--2950},
+  url = {https://arxiv.org/abs/2503.18666v3}
+}
+
+@inproceedings{capsicum,
+  author = {Robert N. M. Watson and Jonathan Anderson and Ben Laurie and Kris Kennaway},
+  title = {Capsicum: Practical Capabilities for {UNIX}},
+  booktitle = {19th USENIX Security Symposium},
+  year = {2010},
+  url = {https://www.usenix.org/legacy/events/sec10/tech/full_papers/Watson.pdf}
+}
+
+@inproceedings{firecracker,
+  author = {Alexandru Agache and Marc Brooker and Andreea Florescu and Alexandra Iordache and Anthony Liguori and Rolf Neugebauer and Phil Piwonka and Diana-Maria Popa},
+  title = {Firecracker: Lightweight Virtualization for Serverless Applications},
+  booktitle = {17th USENIX Symposium on Networked Systems Design and Implementation (NSDI)},
+  year = {2020},
+  pages = {419--434},
+  url = {https://www.usenix.org/system/files/nsdi20-paper-agache.pdf}
+}
+
+@misc{gvisor,
+  author = {{gVisor Authors}},
+  title = {{gVisor} Security Model},
+  howpublished = {Project documentation},
+  url = {https://gvisor.dev/docs/architecture_guide/security/},
+  note = {Accessed October 26, 2026}
+}
+
+@misc{apfprojection,
+  author = {{NVIDIA}},
+  title = {Agent Policy Fabric: Policy Projection},
+  howpublished = {Official documentation, Dev version},
+  url = {https://docs.nvidia.com/agent-policy-fabric/how-it-works/policy-projection},
+  note = {Accessed October 26, 2026}
+}
+
+@misc{langgraphapi,
+  author = {{LangChain}},
+  title = {{LangGraph} Graph API Overview},
+  howpublished = {Official documentation},
+  url = {https://docs.langchain.com/oss/python/langgraph/graph-api},
+  note = {Accessed October 26, 2026}
+}
+
+@misc{langgraphpregel,
+  author = {{LangChain}},
+  title = {{LangGraph} Runtime},
+  howpublished = {Official documentation},
+  url = {https://docs.langchain.com/oss/python/langgraph/pregel},
+  note = {Accessed October 26, 2026}
+}
+
+@misc{langgraphpersistence,
+  author = {{LangChain}},
+  title = {{LangGraph} Persistence},
+  howpublished = {Official documentation},
+  url = {https://docs.langchain.com/oss/python/langgraph/persistence},
+  note = {Accessed October 26, 2026}
+}
+

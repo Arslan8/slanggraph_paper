@@ -24,6 +24,8 @@ def _configure() -> None:
     mpl.rcParams.update(
         {
             "font.family": "serif",
+            "font.serif": ["STIXGeneral"],
+            "mathtext.fontset": "stix",
             "font.size": 8,
             "axes.labelsize": 8,
             "axes.titlesize": 9,
@@ -458,6 +460,93 @@ def operation_overhead(data: dict) -> None:
     _save(fig, "operation-overhead.pdf")
 
 
+
+def _alternative_metrics() -> dict:
+    data = json.loads((ROOT / "evidence/alternative_backends_summary.json").read_text())
+    digest = hashlib.sha256((ROOT / data["source"]).read_bytes()).hexdigest()
+    if digest != data["source_sha256"]:
+        raise ValueError("Alternative-backend summary does not match its source report")
+    return data
+
+
+def _paired_panels(rows: list[dict], workloads: list[str], labels: list[str],
+                   titles: tuple[str, str], name: str, *, height: float = 2.7,
+                   ratio_digits: int = 2) -> None:
+    """Keep ratios and paired-difference confidence intervals on separate axes."""
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, height), gridspec_kw={"width_ratios": [1, 1.12]})
+    for mode, label, color, marker, offset in [
+        ("landlock", "Landlock", "#202020", "o", -0.13),
+        ("container", "Container", "#707070", "s", 0.13),
+    ]:
+        selected = [next(r for r in rows if r["workload"] == w and r["mode"] == mode) for w in workloads]
+        y = np.arange(len(workloads)) + offset
+        ratios = [r["ratio_of_reported_means"] for r in selected]
+        axes[0].plot(ratios, y, linestyle="", marker=marker, color=color, markersize=4, label=label)
+        for x, yy in zip(ratios, y, strict=True):
+            axes[0].annotate(f"{x:.{ratio_digits}f}×", (x, yy), xytext=(5, 0), textcoords="offset points",
+                             va="center", fontsize=7)
+        increments = np.array([r["added_ms"] for r in selected])
+        bounds = np.array([r["session_ci_ms"] for r in selected])
+        axes[1].errorbar(increments, y, xerr=np.array([increments - bounds[:, 0], bounds[:, 1] - increments]),
+                         fmt=marker, color=color, markersize=4, capsize=2, elinewidth=0.8, label=label)
+    axes[0].axvline(1, color="#888888", linestyle="--", linewidth=0.7)
+    axes[1].axvline(0, color="#888888", linestyle="--", linewidth=0.7)
+    axes[0].set_xlabel("Runtime / baseline (ratio of means)")
+    axes[1].set_xlabel("Added time (ms), session 95% CI")
+    axes[0].xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}×"))
+    max_ratio = max(r["ratio_of_reported_means"] for r in rows)
+    axes[0].set_xlim(0.85 if max_ratio < 3 else 0, max_ratio * 1.22)
+    for i, ax in enumerate(axes):
+        ax.set_yticks(range(len(labels)), labels if i == 0 else [""] * len(labels))
+        ax.set_ylim(len(labels) - 0.5, -0.5)
+        ax.set_title(titles[i], fontweight="bold")
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5)
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, legend_labels, loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.55, -0.02))
+    fig.tight_layout(w_pad=2.0, rect=(0, 0.11, 1, 1))
+    _save(fig, name)
+
+
+def current_backend_runtime(data: dict) -> None:
+    _paired_panels(data["comparison"],
+                   ["constant_control", "read_32b", "read_4kib", "read_64kib", "two_reads_32b"],
+                   ["Constant", "Read 32 B", "Read 4 KiB", "Read 64 KiB", "Two reads 32 B"],
+                   ("(a) Relative to verified mode", "(b) Added to verified mode"),
+                   "backend-runtime.pdf", height=2.8)
+
+
+def execution_cost(data: dict) -> None:
+    _paired_panels(data["application"] + data["native_chain"],
+                   ["pandas_february", "env_to_cat"],
+                   ["Pandas replay", "Native chain"],
+                   ("(a) Relative to plain process", "(b) Added to plain process"),
+                   "execution-cost.pdf", height=2.15, ratio_digits=4)
+
+
+def current_operation_overhead(data: dict) -> None:
+    rows = data["operations"]
+    operations = list(dict.fromkeys(r["workload"] for r in rows))
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 4.3), sharey=True)
+    for ax, mode, title in zip(axes, ["landlock", "container"], ["Landlock", "Container"], strict=True):
+        selected = [next(r for r in rows if r["workload"] == w and r["mode"] == mode) for w in operations]
+        means = np.array([r["added_ms"] for r in selected])
+        ci = np.array([r["session_ci_ms"] for r in selected])
+        ax.errorbar(means, range(len(operations)), xerr=[means-ci[:, 0], ci[:, 1]-means],
+                    fmt="o", color="#202020", markersize=3.5, capsize=2, elinewidth=0.8)
+        ax.axvline(0, color="#999999", linestyle="--", linewidth=0.6)
+        ax.set_title(title, fontweight="bold")
+        ax.set_xlabel("Added whole-call time (ms), 95% CI")
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5)
+        ax.spines[["top", "right"]].set_visible(False)
+    axes[0].set_yticks(range(len(operations)), [w.replace("_", " ") for w in operations])
+    axes[0].invert_yaxis()
+    axes[0].set_xlim(-3, 6)
+    axes[1].set_xlim(44, 57)
+    fig.tight_layout(w_pad=2)
+    _save(fig, "operation-overhead.pdf")
+
 def main() -> None:
     """Generate every paper figure from the recorded evaluation values."""
     _configure()
@@ -466,11 +555,12 @@ def main() -> None:
     overhead()
     data = _application_metrics()
     backend = _backend_metrics()
-    application_effects(data, backend)
     application_runtime(data)
     audit_breakdown(data, backend)
-    backend_runtime(backend)
-    operation_overhead(backend)
+    current = _alternative_metrics()
+    current_backend_runtime(current)
+    execution_cost(current)
+    current_operation_overhead(current)
 
 
 if __name__ == "__main__":

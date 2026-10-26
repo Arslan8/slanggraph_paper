@@ -33,28 +33,13 @@ component benchmarks.}
 \label{tab:study-host}
 \end{table*}
 
-\begin{table*}[t]
-\centering
-\small
-\begin{tabularx}{\textwidth}{llXX}
-\toprule
-Application & Upstream revision & Reproduced scope & Protected status or blocker \\
-\midrule
-Pandas Data Analyst & \code{4ffeb7f38178} & Bundled analysis backend & Experimental A/B/C integration \\
-SQL Database Agent & \code{4ffeb7f38178} & Bundled backend; 3/3 clean tasks & Query and schema-sampling mediation incomplete \\
-Open Notebook & \code{a0f6f3081ae0} & Native ingestion and source chat; 1/1 smoke & Source/storage enforcement and server tracing incomplete \\
-Executive AI Assistant & \code{758db7174223} & No completed smoke & Archived; yanked dependencies and no dedicated Gmail test account \\
-Open Deep Research & \code{1b7d2e80db9f} & No completed smoke & Archived; search resources and structured-output smoke unconfigured \\
-Open SWE & \code{ff4e713c094c} & No completed smoke & GitHub/MDA resources and remote-host instrumentation missing \\
-GPT Newspaper & \code{1c447b5672dd} & No completed smoke & Search access or a contract-preserving fixture service missing \\
-AI Hedge Fund & \code{6c41ae8cf5fb} & Historical LangGraph revision; smoke unverified & Provider fixtures and local execution incomplete; no trading \\
-\bottomrule
-\end{tabularx}
-\caption{Fixed application shortlist: eight applications from seven repositories.
-Pandas and SQL share a repository. Only Pandas has protected execution evidence;
-installation and subagents are not additional ports.}
-\label{tab:application-status}
-\end{table*}
+\paragraph{Application shortlist.}
+The fixed shortlist has eight applications from seven repositories. Pandas is
+the only protected integration. SQL and Open Notebook have baseline runs; email,
+research, coding, newspaper, and finance candidates have no completed protected
+port. The archived intake ledger retains immutable pins and dependency,
+provider, account, and remote-instrumentation blockers.
+
 
 \begin{table*}[t]
 \centering

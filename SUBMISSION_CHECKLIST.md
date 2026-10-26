@@ -1,5 +1,45 @@
 # Submission evidence checklist
 
+
+## Latest alternative-backend update (October 26, 2026)
+
+This section supersedes the historical backend comparison as the current
+evaluation headline. The earlier sections retain cohort history.
+
+- [x] Archive the identical new uploads once and import 69 timing rows.
+- [x] Separate common-authorizer timings from raw-operation and Pandas ablations.
+- [x] Report five sessions x 20 calls and session-level paired 95% intervals.
+- [x] Retain Landlock's 1/49 metadata exposure, container 0/49, and 30/30 controls.
+- [x] Separate 132 explicit denials from errors/no-effect outcomes per adapter.
+- [x] Add the separate exec-enabled native chain and its process-quota limitation.
+- [x] Report container setup/teardown outside persistent-container invocation cost.
+- [x] Incorporate review-driven framing, actual manifest/Cedar excerpts, IFC scope,
+      background, terminology, conditional invariant, and primary related work.
+- [ ] Obtain alternatives-v2 and native-chain-v2 raw files, source archives,
+      full-precision timings, manifests/policies, host captures, and commands.
+- [ ] Resolve whether verified-security's 12/12 denotes cases or trials.
+- [ ] Validate production lowering on real host-capability changes, missing
+      dependencies, activation mismatches, and nonwaivable runtime MAC.
+- [ ] Test persistent-container broad-to-narrow grants, principal changes,
+      changed mandatory policy, and residual writable state.
+- [ ] Complete dishonest-manifest and sealed-MAC composition experiments.
+- [ ] Measure SQLite record/broker composition and shared-socket pump operations
+      with positive controls and bypass-prevention ablations.
+- [ ] Expand protected Pandas/SQL workloads; count Notebook only after its
+      server/storage boundary is actually mediated.
+- [ ] Obtain full-workflow and production-path costs on the frozen release.
+- [ ] Compare matched cases fairly with prior frameworks; safe refusal is a
+      security result with a utility cost, not an automatic bypass.
+- [ ] Demonstrate a bounded independent requirement producer through the public
+      interface without granting it runtime policy-update authority.
+
+Use the current student brief as the operational work order. Existing matching
+cohorts need evidence validation, not automatic blanket reruns. The prior item
+calling for full AgentDojo/InjecAgent/ASB parity is not a prerequisite to the
+deterministic enforcement claim: retain benchmark citations as related work,
+and only report attack success where attempts and denominators are defined.
+A release tag need not be signed to establish a frozen reproducibility identity;
+record the exact immutable source and artifact hashes.
 Target: USENIX Security '27 Cycle 2. Registration is due January 19, 2027;
 submission is due January 26, 2027 (Anywhere on Earth). The submission permits
 13 pages of body text, unlimited references and appendices, and requires an Open

@@ -2,92 +2,92 @@
 
 Anonymous USENIX-style manuscript for slangGraph.
 
-```bash
-make
-make check
-```
+Run `make check` to regenerate vector figures, compile LaTeX, and check PDF
+readability and embedded fonts. Set `PYTHON=/path/to/python` if needed.
+Manuscript checks do not execute framework experiments or establish venue compliance.
 
-`make` regenerates the vector figures with Matplotlib and builds the paper.
-Set `PYTHON=/path/to/python` to select an interpreter. `make check` checks PDF
-readability and font embedding, not venue compliance or evidence completeness.
+## Current framing
 
-The current design baseline is `Arslan8/slanggraph:wip` at
-`40e24e978f9ec2e8f061abb21077e2251583f5e5` (October 25, 2026).
-The introduction follows EC's progression from cited applications and concrete
-failures to existing defenses, their enforcement boundaries, and the missing
-system contract. Runtime functions, Chrome companion processes, and MCP servers
-motivate three requirements: unified policy, host- and configuration-dependent
-lowering, and composite distributed reference monitoring. The design uses Flask's
-security-server/object-manager separation, with independent inference and
-enforcement interfaces. The contributions are the common grant contract, host
-adapters and composite lowering, and implementation and evaluation.
+The paper centers the authority contract connecting fallible requirement proposals
+to actual tool effects. Principal authorization and sealed operator MAC cap an
+invocation grant; runtime APIs, semantic mediators, and host adapters enforce its
+obligations. Exact, tightened, and unsupported lowering outcomes are explicit.
+Requirement output may be untrusted data. Installed analyzer code, policy engines,
+normalizers, mediators, and bootstrap remain trusted.
 
-The motivation develops these requirements through one record-reporting example.
-The manuscript covers sealed runtime MAC, restricted in-process admission, typed
-domain mediators, SQLite record mediation, and the fixed-policy analysis/provenance
-runtime. Table 1 is a capability matrix organized by policy/requirements, execution
-enforcement, and composition. Prior systems receive credit for the boundaries they
-actually enforce. Chrome and remote MCP illustrate deployment requirements, not
-additional completed ports or experimental results.
-Trust assumptions and coverage limits remain in the security model and evaluation.
+The introduction retains cited applications, incidents, runtime/companion/MCP
+deployment forms, EC's reference-monitor separation, and Flask's architecture.
+It now leads into the gap with the controlled call-versus-effect canaries.
+The design adds LangGraph background, consistent component roles, a source-backed
+SQLite manifest/policy example, execution-status definitions, and the conditional
+monotonic-authority invariant.
 
-Table 1 separately identifies language-based sandboxing. CaMeL receives credit
-for its restricted orchestration interpreter; slangGraph receives credit for
-admitted tool bodies using monitored APIs. The caption states those scopes.
-Host lowering and dual execution paths remain separate capabilities.
+Table 1 credits IsolateGPT's process isolation and FIDES/CaMeL's precise flow
+tracking. slangGraph's IFC cell is a half circle for instrumented/coarse coverage.
+Related work also covers Conseca, AgentSpec, Capsicum, gVisor, and Firecracker.
+APF receives credit for programmable grants, mandatory forbids, and extensible
+policy projection. Its documented bundle-load projection is distinguished from
+invocation-specific semantic/host obligations. No APF bypass is claimed.
 
-The evaluation combines one protected Pandas computation integration, two
-additional baseline adaptations, a 49-case backend operation census, and three
-separate backend timing studies. The production verified-language comparison is
-distinct from the synthetic helper condition. All timing comparisons lead with
-percentages or runtime multiples, with absolute statistics in the appendices.
+## Evidence and reproducibility
 
-Evidence is archived without changing the supplied files:
+The implementation design pin remains
+`Arslan8/slanggraph:wip@40e24e978f9ec2e8f061abb21077e2251583f5e5`.
+It does not by itself reproduce the evaluation overlays.
 
-- `evidence/application_macrobenchmarks_source.md` retains the original
-  application study, including its oracle correction and separate cohorts.
-- `evidence/paper_evaluation_source.md` adds the expanded report: 49-case census,
-  100-call matched backend timings, an exclusive stage partition, 16 operation/API
-  variants, and five production verified-versus-Linux workloads.
-- The corresponding summary JSON files contain reported aggregates, not raw
-  samples. Figure generation checks each report's SHA-256. To reimport a revised
-  backend report after review, run `python3 scripts/import_backend_metrics.py`.
+Three source reports are preserved byte-for-byte:
 
-The source archives, raw samples, admission diagnostics, and body-timing records
-referenced by these reports are not included in this paper repository or present
-in the reviewed public WIP tree. No experiment was rerun during this manuscript
-edit. The source commit alone does not identify the application working-tree
-changes or substitute for the backend cohorts' frozen sources. Cedar CLI process
-and serialization behavior was checked against the WIP implementation.
+- `evidence/application_macrobenchmarks_source.md`: original protected Pandas
+  study, baseline adaptations, corrected oracles, and separate cohorts.
+- `evidence/paper_evaluation_source.md`: historical backend census, synthetic
+  cost profiles, and the earlier comparison with different policy frontends.
+- `evidence/alternative_backends_source.md`: new common-authorizer comparison,
+  16 raw-operation variants, execution-only Pandas replay, Landlock/container
+  census, container lifecycle, and a separate opaque native-chain profile.
+  The two latest uploads were identical and count as one report.
 
-`sections/evaluation.tex` contains the main study, with environment and exact
-application results in `sections/evaluation_appendix.tex` and backend protocol,
-paired statistics, production-mode results, and the operation-overhead plot in
-`sections/backend_evaluation.tex`. Historical component checks and policy-only
-measurements remain in `sections/component_evidence.tex` at their original
-snapshots. E1 exposure reductions are static projections, not executed blocking.
+The new summary is imported with
+`python3 scripts/import_alternative_metrics.py`. Its source SHA-256 is
+`a4068963b3ebb56c84ec7ce25cc77155989fec812cbdf2033d95a64bd595aa8f`.
+The importer checks row counts, paired-increment rounding consistency, and trial
+denominators. `python3 scripts/generate_backend_tables.py` regenerates the
+new appendix tables. Figure generation checks source hashes and publishes PDFs
+atomically. Text uses Times-compatible STIX fonts.
 
-Five main figures and two tables cover the architecture, finite probe counts,
-application runtime, backend and production-mode runtime, and measured cost
-sources. Application replay costs are 2.04x for B/A and 3.48x for C/A; observed
-full-workflow C/A is 1.202x, including model and runner effects. Synthetic host
-cost is 15.30-15.63x its trusted baseline, and Linux is 11.60-17.31x the actual
-verified mode on the five measured workloads. Different policy frontends prevent
-interpreting the latter as a pure kernel-isolation tax.
+The new timing protocol has 100 calls per workload/mode: five sessions of 20,
+with ten warmups and a separate first-use call per session. Confidence intervals
+are reported Student-t intervals over five session mean paired differences.
+Ratios use rounded reported means, not reconstructed raw measurements.
 
-Cost profiles keep their denominators separate: audit is 98.1% of application B's
-non-subprocess time in the 20-call diagnostic; Cedar filtering is 65.8-66.2% of
-total synthetic host dispatch without a durable audit sink. No cross-cohort
-subtraction or unmeasured optimization speedup is claimed. Normalized whiskers
-show SDs scaled by a fixed baseline, not confidence intervals. No raw distribution
-is reconstructed. See `SUBMISSION_CHECKLIST.md` for the remaining evidence.
+The Landlock and rootless-container adapters are evaluation implementations.
+Their telemetry is not production activation evidence. Both use the same
+production Cedar authorizer in the constant/read comparison: 3.62-4.92x and
+5.98-8.37x verified-mode runtime. The raw-operation and application ablations
+exclude Cedar and durable audit. The new Pandas Landlock point estimate is
++0.34%, with an increment interval that includes zero; this is not full-framework
+overhead. The earlier complete replay remains 3.48x upstream and the observed
+full workflow 1.202x, including model and runner effects.
 
-The low-level Landlock executor, object-broker worker, and deployment-backed
-bubblewrap executor have different integration coverage. Do not transfer
-activation, lifecycle, or performance claims between them. Source-body admission
-does not certify imports or arbitrary Python, and runtime MAC is per interpreter
-under trusted bootstrap. Policy and analysis extensions remain trusted.
+The new census retains Landlock's metadata exposure: 1/49 forbidden cases,
+versus 0/49 for the container, with 30/30 allowed trials per adapter. Each has
+132 explicit-denial trials; generic errors and no-effect outcomes remain separate.
+The old census's 135 explicit denials belong only to its historical cohort.
+Native-chain checks use a distinct exec-enabled profile and do not establish
+arbitrary-binary coverage or a Landlock process-count quota.
 
-Before submission, prepare a history-free anonymous artifact and replace the
-placeholder Open Science URL. Keep author identity out of `main.tex`; preserve
-ordinary attribution to prior work. Avoid em dashes in manuscript prose.
+No experiment was rerun during this manuscript revision. Referenced raw samples,
+source archives, full-precision CSVs, and a frozen release covering all claims
+remain required artifact inputs. The student brief requests the missing
+semantic/MAC/lowering/reuse experiments and additional protected workloads.
+
+## Submission work
+
+The current draft separates mechanism implementation, finite measurements,
+source findings, and outstanding validation. General framework placement,
+SQLite's fixed schema, per-interpreter MAC, trusted setup, and local receipt
+assumptions remain explicit. See `SUBMISSION_CHECKLIST.md` for the remaining
+release and artifact work and `DESIGN_ALIGNMENT.md` for the claim history.
+
+Create the history-free anonymous artifact before replacing the Open Science
+placeholder. Keep ordinary prior-work attribution; remove author-identifying
+artifact history for submission. Avoid em dashes in manuscript prose.

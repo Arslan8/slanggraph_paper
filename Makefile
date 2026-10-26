@@ -1,10 +1,11 @@
 PYTHON ?= python3
 FIGURES = figures/motivation.pdf figures/architecture.pdf figures/overhead.pdf \
-	figures/application-effects.pdf figures/application-runtime.pdf figures/audit-breakdown.pdf \
-	figures/backend-runtime.pdf figures/operation-overhead.pdf
+	figures/application-runtime.pdf figures/audit-breakdown.pdf \
+	figures/backend-runtime.pdf figures/operation-overhead.pdf figures/execution-cost.pdf
 TEX_SOURCES = main.tex $(wildcard sections/*.tex)
 EVALUATION_DATA = evidence/application_macrobenchmarks_summary.json evidence/application_macrobenchmarks_source.md \
-	evidence/backend_evaluation_summary.json evidence/paper_evaluation_source.md
+	evidence/backend_evaluation_summary.json evidence/paper_evaluation_source.md \
+	evidence/alternative_backends_summary.json evidence/alternative_backends_source.md
 
 .PHONY: all clean check figures
 .DELETE_ON_ERROR:
@@ -12,7 +13,8 @@ EVALUATION_DATA = evidence/application_macrobenchmarks_summary.json evidence/app
 all: main.pdf
 
 # The generator writes all figures together; run it only once, including with -j.
-figures: scripts/generate_figures.py $(EVALUATION_DATA)
+figures: scripts/generate_figures.py scripts/generate_backend_tables.py $(EVALUATION_DATA)
+	"$(PYTHON)" scripts/generate_backend_tables.py
 	"$(PYTHON)" scripts/generate_figures.py
 	@for figure in $(FIGURES); do test -s "$$figure" || exit 1; done
 

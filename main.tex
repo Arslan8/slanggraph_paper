@@ -6,6 +6,12 @@
 \usepackage{graphicx}
 \usepackage{tabularx}
 \usepackage{xspace}
+\usepackage{listings}
+\usepackage{wasysym}
+\lstset{basicstyle=\ttfamily\footnotesize,columns=fullflexible,
+  keepspaces=true,breaklines=true,showstringspaces=false,
+  aboveskip=3pt,belowskip=3pt}
+\newcommand{\partialmark}{\LEFTcircle}
 
 \newcommand{\sys}{\textsc{slangGraph}\xspace}
 \newcommand{\code}[1]{\texttt{#1}}
@@ -17,29 +23,26 @@
 \maketitle
 
 \begin{abstract}
-Deploying an agent with least privilege requires more than deciding which tool
-calls to allow. An approved tool can access undeclared resources, a file sandbox
-cannot distinguish records in one database, and an allowed read can feed a later
-unauthorized disclosure. Existing agent defenses provide call policies,
-information-flow tracking, or process confinement, but leave developers to
-connect these mechanisms across an agent's execution.
-We present \sys, an extensible security enforcement framework for LangGraph.
-Its central abstraction is an invocation resource grant: tool manifests declare
-requirements, principal policies authorize them, and operator-owned mandatory
-policies restrict the result. The same grant governs restricted in-process
-APIs, domain-specific resource mediators, and host-confined tools. A separate
-analysis interface supplies findings and provenance to fixed policies, allowing
-new analyses to reuse the enforcement infrastructure. \sys implements this
-separation with runtime-wide mandatory restrictions, typed pump and SQLite
-mediators, host-dependent lowering, and checks on instrumented data flows.
-In a Pandas application, host enforcement eliminates all three tested forbidden
-filesystem effects while preserving computation; authorization alone eliminates
-none. A separate backend census observes no forbidden effect in 49 cases and
-retains all 30 positive-control trials per host condition. Application replay
-takes $3.48\times$ upstream runtime. Separate profiles identify audit persistence
-and Cedar CLI evaluation as major costs.
-\sys provides a common enforcement foundation on which independently developed
-agent-security analyses and policies can build.
+An agent policy is useful only if an approved tool cannot exceed it. Tool-call
+checks leave native effects unchecked; file sandboxes cannot distinguish records
+in one database. Connecting these boundaries is especially difficult when tool
+requirements come from fallible inference and execution spans runtime APIs,
+native processes, and resource services.
+We present \sys, an extensible enforcement framework for LangGraph. Manifests
+propose requirements, principal policies authorize them, and sealed operator
+policy caps the resulting invocation grant. Adapters assess each obligation as
+exact, tightened, or unsupported and compose runtime checks, semantic brokers,
+and host confinement around that grant. Unlike APF's projection of authored
+sandbox policies, \sys binds manifest-derived invocation authority to both
+domain operations and tool execution. New requirement producers reuse this
+boundary without becoming its enforcement mechanism.
+In a Pandas integration, call authorization leaves three forbidden filesystem
+effects reachable; host enforcement removes all three while preserving the
+computation. A separate 49-case census exposes a metadata-access difference
+between Landlock and container adapters. With a common Cedar authorizer, these
+host adapters take $3.62$--$8.37\times$ the admitted in-process path on five
+small workloads. An opaque two-binary chain executes under confinement but is
+rejected by source admission, demonstrating why both paths are needed.
 \end{abstract}
 
 \section{Introduction}
@@ -47,10 +50,8 @@ agent-security analyses and policies can build.
 Agentic systems build and deploy software~\cite{replitagent}, analyze
 databases~\cite{aidatascienceteam}, conduct document
 research~\cite{opennotebook}, and automate browser tasks~\cite{browseruse}.
-These applications turn model outputs into operations on real resources,
-often using the files, credentials, and service connections of their users.
-A mistaken or adversarially induced action can therefore affect systems beyond
-the conversation.
+They turn model outputs into operations using their users' files, credentials,
+and service connections, making mistakes and adversarial instructions consequential.
 
 The consequences are already concrete. In 2025, SaaStr reported that Replit
 Agent deleted its production database and disregarded code-freeze
@@ -63,10 +64,18 @@ in 2026~\cite{claudeconfigescape,claudeworktreeescape}. These cases motivate
 enforceable limits on an agent's effects, independent of whether the model
 follows instructions.
 
+The same boundary problem appears without a model mistake. In our controlled
+canary study, eight policy-conformant calls pass Progent and still reach
+unauthorized sinks inside deliberately vulnerable tool implementations
+(Section~\ref{sec:effect-gap}). Approving the declared request does not remove
+the implementation's ambient authority.
+
 Existing defenses address this problem at several boundaries. Progent and OPA
 authorize tool calls~\cite{progent,opatools}. CaMeL, SEAgent, and FORGE enforce
 policies over interpreted execution, agent interactions, or tracked information
-flows~\cite{camel,seagent,forgecode}. Nono and Sandlock confine tool processes
+flows~\cite{camel,seagent,forge}. FIDES tracks confidentiality and integrity;
+IsolateGPT isolates applications and mediates their collaboration through user
+permissions~\cite{fides,isolategpt}. Nono and Sandlock confine tool processes
 using declared capabilities~\cite{nono,sandlock}. NVIDIA's Agent Policy Fabric
 (APF) combines programmable grants and mandatory forbids with enforcement
 adapters~\cite{apf}. These mechanisms provide useful enforcement, but at
@@ -74,65 +83,61 @@ different scopes.
 
 The remaining gaps appear when execution crosses those scopes. A tool-call
 proxy checks the requested operation, while an approved native implementation
-can perform additional accesses~\cite{progentcode,opatools}. CaMeL's restricted
+can perform additional accesses~\cite{progent,opatools}. CaMeL's restricted
 interpreter does not confine its native callees; SDK and event-level mediation
 likewise depends on the tool implementation respecting the instrumented
-boundary~\cite{camelcode,seagent,forgecode}. Host sandboxes constrain files and
+boundary~\cite{camel,seagent,forge}. Host sandboxes constrain files and
 processes, but a database-file permission cannot distinguish Alice's record
 from Bob's~\cite{nono,sandlock}. APF supplies policy-to-sandbox projection, but
 its reviewed integration does not bind manifest-derived invocation authority
 to domain mediators and framework operations through one enforcement
-contract~\cite{apf}. Table~\ref{tab:features} identifies these gaps. Improving
+contract~\cite{apf,apfprojection}. Table~\ref{tab:features} identifies these gaps. Improving
 policy inference alone does not close them.
 
 \begin{table*}[t]
 \centering
 \small
-\setlength{\tabcolsep}{2pt}
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l*{11}{c}@{}}
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l*{9}{c}@{}}
 \toprule
- & \multicolumn{4}{c}{Policy and requirements} &
- \multicolumn{5}{c}{Execution enforcement} &
- \multicolumn{2}{c}{Composition} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-10}\cmidrule(l){11-12}
-\textbf{System} & \shortstack{Tool-call\\policy} & \shortstack{Flow\\tracking} &
- \shortstack{Resource\\manifests} & \shortstack{Grants +\\controls} &
- \shortstack{Language\\sandbox} & \shortstack{Host\\lowering} & \shortstack{Domain\\broker} &
- \shortstack{Dual tool\\paths} & \shortstack{Effect\\bounds} &
- \shortstack{Invocation\\grant} & \shortstack{Shared\\inference\\contract} \\
+\textbf{System} & \shortstack{Call\\policy} & \shortstack{Value-level\\IFC} &
+\shortstack{Resource\\manifests} & \shortstack{Grants +\\controls} &
+\shortstack{Language\\sandbox} & \shortstack{Host\\confinement} &
+\shortstack{Domain\\broker} & \shortstack{Invocation\\fidelity} &
+\shortstack{Shared grant\\contract} \\
 \midrule
-Progent~\cite{progent,progentcode} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-CaMeL~\cite{camel,camelcode} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\ddagger}$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-FORGE~\cite{forgecode} & $\checkmark$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-SEAgent~\cite{seagent} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-OPA tool calling~\cite{opatools} & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-APF + OpenShell~\cite{apf} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
-nono~\cite{nono} & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
-Sandlock~\cite{sandlock} & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
+Progent~\cite{progent} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+CaMeL~\cite{camel} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+FIDES~\cite{fides} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+IsolateGPT~\cite{isolategpt} & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
+FORGE/SASY~\cite{forge} & $\checkmark$ & \partialmark & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+SEAgent~\cite{seagent} & $\checkmark$ & \partialmark & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+OPA tool calling~\cite{opatools} & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+APF + OpenShell~\cite{apf} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
+nono~\cite{nono} & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
+Sandlock~\cite{sandlock} & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
 \midrule
-\textbf{\sys} & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ \\
+\textbf{\sys} & $\checkmark$ & \partialmark & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
 \bottomrule
 \end{tabular*}
 \vspace{3pt}
 \begin{minipage}{\textwidth}
 \footnotesize
-\textbf{Grants + controls}: programmable authorization with overriding restrictions.
-\textbf{Language sandbox}: restricted language features and APIs constrain executable agent code.
-\textbf{Domain broker}: extensible domain operations checked against the invocation grant.
-\textbf{Dual tool paths}: in-process and confined native-tool contracts.
-\textbf{Invocation grant}: tool requirements restricted by principal authorization and mandatory policy.
-\textbf{Shared inference contract}: independent requirement producers reuse grant construction and enforcement.
+\textbf{Value-level IFC}: tracking confidentiality/integrity through data and control dependencies;
+\partialmark\ denotes coarser or instrumented-path tracking.
+\textbf{Grants + controls}: programmable permissions with overriding restrictions.
+\textbf{Domain broker}: grant-checked operations within a shared database/device.
+\textbf{Invocation fidelity}: per-obligation exact/tightened/unsupported assessment and activation binding.
+\textbf{Shared grant contract}: requirements, principal authorization, and mandatory policy produce authority
+shared by runtime, resource, and host enforcers.
 \end{minipage}
-\caption{Capabilities of the compared agent-security systems.
-$\checkmark$: implemented in the reviewed scope; $\times$: the defined mechanism
-is not provided by the reviewed integration; custom extensions are excluded.
-$\dagger$Confinement follows configured sandbox permissions; the invocation-grant column separately
-measures their derivation from requirements and authorization.
-$\ddagger$CaMeL restricts interpreted orchestration; called native tool bodies
-remain outside that interpreter.
-*\sys restricts admitted tool bodies to monitored APIs under trusted setup;
-native code uses confinement. Flow tracking covers instrumented paths.}
+\caption{Mechanisms in the reviewed integrations, not a ranking of overall security.
+$\checkmark$: provided; \partialmark: limited scope; $\times$: the defined mechanism is not supplied.
+$\dagger$CaMeL restricts orchestration, not native tool bodies.
+*\sys admits restricted tool bodies under trusted setup; native tools use confinement.
+CaMeL and FIDES offer finer flow precision; IsolateGPT additionally supplies a user-facing permission model.
+Source revisions are recorded in Appendix~\ref{app:prior-scope}.}
 \label{tab:features}
 \end{table*}
 
@@ -142,54 +147,45 @@ runtime~\cite{langchaintools}, (2) a shim controlling a companion Chrome process
 through Playwright~\cite{playwrightbrowser}, or (3) an MCP client sending
 requests to a local or remote tool server~\cite{mcparchitecture}.
 Browser agents themselves can run locally or use cloud-hosted
-browsers~\cite{browseruse}. A check inside the agent runtime cannot by itself
-restrict a companion process or a remote server's resource accesses.
-Conversely, a sandbox around the client cannot express every operation performed
-on its behalf. A deployable defense must adapt to both the tool configuration
-and the host environment.
+browsers~\cite{browseruse}. Runtime checks cannot alone restrict a companion or remote server; client
+confinement cannot express all service operations. A deployable defense must
+adapt to the tool configuration and host environment.
 
-This requires three properties together. \textbf{Unified policy} must describe
-the principal's authority over application resources, regardless of where a
-tool executes. \textbf{Host- and configuration-dependent lowering} must translate
-that authority into controls the selected execution environment can enforce,
-without granting extra access. \textbf{Composite distributed reference
-monitoring} must connect the checks at framework, process, and resource
-boundaries so that bypassing one interface does not recover forbidden authority.
-Here, distribution concerns the cooperating enforcement components; a remote
-resource still requires a trusted enforcement point at its boundary.
-The compared systems do not supply this common contract across all three
-properties (Table~\ref{tab:features}).
+The missing abstraction is a resource authority contract that survives these
+transitions. Requirements must remain proposals capped by principal and operator
+policy. Lowering must expose whether the actual host can enforce each obligation,
+including required tightening or refusal. Finally, a record permission must bind
+both the broker check and the worker's inability to bypass it. Independent
+allowlists do not establish that relationship.
 
 To this end, we design \sys, an extensible security enforcement framework for
 LangGraph. Following Flask's separation of a security server from enforcing
-object managers~\cite{spencer1999flask}, \sys separates policy decisions from
-the mechanisms that control resources. Manifest requirements, principal
-authorization, and operator-owned mandatory restrictions produce one invocation
-grant. Framework object managers, domain mediators, and host adapters enforce
-that grant at their respective boundaries. Admitted in-process tool bodies use
-monitored APIs; untrusted native tools execute in confined workers. A database
-mediator can enforce record permissions while host confinement prevents direct
-access to the underlying database files. Instrumented model and output
-boundaries check subsequent uses of the result.
+object managers~\cite{spencer1999flask}, \sys constructs one invocation grant
+from manifests, principal authorization, and sealed operator restrictions.
+Framework object managers, domain mediators, and host adapters enforce its
+obligations. Admitted in-process tools use monitored APIs; untrusted native
+tools execute in confined workers. This is composite distributed reference
+monitoring across cooperating enforcement components. Remote services still
+require trusted enforcement at their own resource boundary.
 
-\sys lowers each grant into cooperating enforcement obligations according to
-the selected tool configuration and available host mechanisms. Lowering may
-preserve or reduce authority; an unsupported required obligation denies execution.
-Operator policy remains mandatory across supported paths in the configured
-interpreter. Separate analysis and enforcement interfaces let new requirement
-inference systems and runtime analyses reuse these mechanisms, following the
-extensible mediation model of LSM~\cite{wright2002lsm,linuxlsm}. Developers can
-add a resource adapter without replacing policy analysis, or add an analyzer
-without rebuilding confinement.
+APF already projects authored sandbox policies and supplies mandatory forbids.
+\sys's additional contract derives authority for each invocation and carries
+it through domain mediation, source admission, and host activation with an
+explicit fidelity ledger. Like EC's separation of compartment identification
+from ECK enforcement~\cite{khan2023ec}, and LSM's separation of hooks from
+policy~\cite{wright2002lsm}, this design lets new requirement producers reuse
+enforcement. Producer output may be untrusted data; installed policy engines,
+analyzer code, and mediators remain trusted components.
 
-Our evaluation connects these mechanisms to observable effects. In a Pandas
-application, host enforcement eliminates all three tested forbidden filesystem
-effects while retaining computation; authorization alone eliminates none.
-A separate 49-case backend census observes no forbidden effects under either
-host condition and retains all 30 positive-control trials per condition.
-Application replay takes $3.48\times$ upstream runtime. Separate application
-and backend profiles identify audit persistence and Cedar CLI evaluation as
-major costs.
+Our evaluation demonstrates why both call and effect checks are necessary.
+Host enforcement removes three forbidden Pandas effects that call authorization
+leaves reachable. A separate census retains all 30 allowed-control trials per
+adapter while exposing a Landlock metadata case. With the same Cedar authorizer,
+Landlock and container evaluation adapters take $3.62$--$4.92\times$ and
+$5.98$--$8.37\times$ admitted in-process runtime. Conversely, an opaque native
+chain runs under confinement even though source admission rejects it. The
+earlier protected application replay takes $3.48\times$ upstream runtime;
+full-workflow time is $1.20\times$, including model and runner effects.
 
 \begin{samepage}
 Our contributions are:
@@ -203,8 +199,8 @@ Our contributions are:
   authority.
   \item \textbf{An implementation and evaluation.} We instantiate the framework
   in LangGraph with pump and SQLite mediators and extensible analysis hooks,
-  and evaluate application effects, a 49-case backend census, execution costs,
-  and component-level reference-monitor checks.
+  and evaluate application effects, a 49-case backend census, both execution
+  paths, an opaque native chain, and component reference-monitor checks.
 \end{itemize}
 \end{samepage}
 
@@ -260,17 +256,21 @@ instead of reconstructing the security boundary for each defense.
 \section{Security Model}
 \label{sec:model}
 
-Let $c=(p,t,a,h)$ be a proposed call with principal $p$, tool $t$, arguments $a$,
-and security history $h$. Authorization admits $c$ and constructs a resource
-grant $G(c)$. Let $E_{B,H}(c)$ denote authority-bearing effects reachable through
-runtime boundary $B$ on host $H$, projected onto the protected domains and
-including publication. For enforced execution, the required relation is
+Let $c=(p,t,a,h)$ denote a call with authenticated principal $p$, tool $t$,
+arguments $a$, and security history $h$. Let $R(c)$ be the canonical candidate
+authority proposed by its manifest together with the explicit runtime baseline.
+Discretionary authorization and mandatory filtering produce grant $G(c)$;
+lowering produces effective authority $L_{B,H}(c)$ for boundary $B$ and host $H$.
+For an \code{ENFORCED} invocation, the monotonic-authority invariant is
 \begin{equation}
-  E_{B,H}(c) \subseteq G(c).
+  E_{B,H}(c) \subseteq L_{B,H}(c) \subseteq G(c) \subseteq R(c),
   \label{eq:effect}
 \end{equation}
-An allow decision alone does not establish this relation. It also requires the
-execution and resource boundaries below.
+where $E$ is the set of reachable effects projected onto the protected domains.
+Every tool-requested line of $G$ must satisfy principal and owner ceilings and
+survive mandatory forbids; the runtime baseline is operator-approved.
+Equation~\ref{eq:effect} is a conditional enforcement
+obligation, not a claim that finite tests establish every reachable effect.
 
 \subsection{Reference-monitor requirements}
 
@@ -281,10 +281,13 @@ reference-monitor obligations~\cite{anderson1972reference,jaeger2011reference};
 here they apply across the agent runtime and its execution backends.
 
 \paragraph{G1: Complete mediation.}
-Every operation on an in-scope object must pass an authorization check that can
-deny the operation before it occurs. This includes effects inside tools and
-later model and output operations. Checking only the tool-call boundary leaves
-the implementation's own accesses unchecked.
+For an admitted deployment, every operation in its protected inventory must
+reach a refusing check before its effect. The supported contract includes the
+admitted tool path and the framework/model/output routes declared for that
+deployment. Runtime MAC rejects unsupported graph shapes rather than granting
+them this guarantee. A missing hook on a declared protected path is a coverage
+failure, not a reason to redefine scope. General LangGraph compatibility paths
+remain outside the established contract (Section~\ref{sec:limitations}).
 
 \paragraph{G2: Tamperproofness.}
 Code outside the TCB must not modify the monitor, policy, grants, provenance, or
@@ -325,94 +328,80 @@ channels, denial of service, and a provider's handling of data after authorized
 submission are outside the claim. Trusted initialization and mediator code are
 not confined by a tool-body certificate. Task intent is also separate: exact authority does not
 prove that an allowed action is beneficial.
+This boundary puts credential custody, entitlement, and enforcement under
+operator control while treating generated requests and confined implementations
+as hostile. An untrusted requirement producer submits data through the manifest
+interface; installing its Python code as an analyzer would instead add it to
+the TCB. A mediated service is trusted for its resource semantics and must be
+protected from direct worker access.
 
 \section{Design Overview}
 \label{sec:overview}
 
-Figure~\ref{fig:architecture} shows the enforcement pipeline. Router-mediated
-operations enter \code{HostRouter} with an authenticated principal and immutable
-request; high-level resource tools use the object authorizer and dispatcher.
-Policy constructs a grant. Framework effects use the object manager; a selected
-Linux adapter constrains host effects. The Landlock path uses a fresh worker
-with filesystem, syscall, and resource controls. The deployment-backed path uses
-bubblewrap and seccomp. Their integration coverage differs, as detailed in
-Section~\ref{sec:linux}. Host-confined execution requires verified activation before release.
-The high-level object broker supplies a separate Landlock-based worker path;
-restricted in-process tools use checked API terminals instead of a worker.
-These contracts share authorization, but their enforcement evidence differs.
+\subsection{LangGraph background}
+
+LangGraph represents an application as nodes operating on shared state and
+edges selecting subsequent work~\cite{langgraphapi}. Nodes may call models,
+invoke tools, update state, or launch subgraphs. \code{ToolNode} executes tool
+calls requested by the model; it is one dispatch surface, not the entire
+application. Compilation produces a Pregel runtime that schedules work in
+steps, including parallel branches~\cite{langgraphpregel}. Checkpointers save
+execution state for resume, while stores retain data across
+interactions~\cite{langgraphpersistence}. Consequently, a tool return can later
+reach a model prompt, checkpoint, or outward publication. Retrying or restoring
+work must preserve identity and rerun the applicable authorization checks.
+
+\subsection{Components and execution paths}
+
+Figure~\ref{fig:architecture} separates responsibilities. The \emph{router}
+(\code{HostRouter}) intercepts protected framework operations. The
+\emph{authorizer} computes grants; the \emph{coordinator} negotiates obligations
+and validates activation. An \emph{object manager} enforces framework operations.
+The \emph{dispatcher} selects in-process or worker execution. Its
+\emph{object broker} authenticates worker requests and invokes a trusted
+\emph{resource mediator}, such as the SQLite record service. Host adapters
+constrain effects outside those APIs.
+
+There are three production Linux paths. \code{LandlockSandboxExecutor} provides
+namespace-free filesystem/syscall confinement; \code{LinuxSandboxExecutor}
+uses bubblewrap and supports versioned deployments; \code{ObjectBrokerDispatcher}
+composes a separate Landlock worker with semantic mediators. The protected
+Pandas experiment uses the bubblewrap path. The new Landlock/rootless-container
+timings use evaluation adapters around a common authorizer, not these production
+executors. Their telemetry is distinct from production activation receipts.
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/architecture.pdf}
-  \caption{\sys architecture. Framework and host objects have different
-  enforcers and are intended to share one authorization and evidence chain.
-  Analysis supplies evidence to fixed policy. Resource mediators interpret
-  domain operations; host confinement prevents direct worker access. The
-  deployment-backed bubblewrap path has separate integration coverage. The
-  protected inventory is independent of current placement success.}
+  \caption{\sys architecture. A shared grant connects framework, resource, and host enforcers.
+  Requirement producers propose authority; trusted policy decides it. Analysis
+  supplies evidence to fixed policy. Semantic mediators check domain operations;
+  host confinement prevents direct worker access. Admission and activation
+  establish the respective in-process and worker boundaries.}
   \label{fig:architecture}
 \end{figure*}
 
-\subsection{One scope rule}
+\subsection{Scope and authority}
 
-The protected-operation inventory defines scope independently of current hook
-placement. Every operation in that inventory must reach a refusing route.
-A permissive default does not remove an object from the security model, and
-adding an adapter or a passing example does not establish that every upstream
-path uses it. Missing placement remains a coverage failure.
+The protected inventory is independent of hook placement. It covers principal
+transfer, tool and child dispatch, registry changes, state/store access,
+approval resume, explicitly guarded framework operations, model prompts,
+output publication, and host resources. A missing refusing route is a coverage
+failure. \code{ToolNode} and \code{guarded\_tool} are clients of the router,
+not independent reference monitors.
 
-\sys defines ten object classes, summarized in Table~\ref{tab:objects}. The
-kernel owns HostResource. LangGraph owns the other nine. \code{ToolNode} and
-\code{guarded\_tool} are callers into \code{HostRouter}, not separate security
-boundaries.
-
-\begin{table}[t]
-\centering
-\small
-\begin{tabularx}{\columnwidth}{lX}
-\toprule
-Class & Refusing operations \\
-\midrule
-Principal & bind, transfer, attenuate \\
-ToolCall & prepare, invoke, post \\
-Dispatch & subgraph, branch, subagent, nested agent \\
-ToolRegistry & register, override \\
-State & write, restore, tool/model/store read \\
-Approval & resume and full reauthorization \\
-FrameworkOp & explicitly guarded operation \\
-ModelInvocation & prompt assembly \\
-Output & emit to destination \\
-HostResource & file, socket, exec, syscall, limits \\
-\bottomrule
-\end{tabularx}
-\caption{Protected object classes. The inventory defines the operations that
-require refusing routes, independently of shipped policy defaults or placement.}
-\label{tab:objects}
-\end{table}
-
-\subsection{Authorization, enforcement, evidence}
-
-The design separates three questions that are often collapsed:
-
-\begin{enumerate}
-  \item \emph{Authorization:} what exact authority should this operation have?
-  \item \emph{Enforcement:} which components make all other authority
-  unavailable?
-  \item \emph{Evidence:} what establishes that those components protected this
-  execution?
-\end{enumerate}
-
-A policy decision answers only the first. An adapter capability name answers
-neither the second nor the third. \sys carries an immutable grant through all
-three stages and binds their outputs by digest and execution identity.
+Authorization determines the grant; adapters make other authority unavailable;
+activation evidence binds those controls to the actual execution. A policy
+decision or an adapter capability name alone cannot establish all three.
 
 \section{Framework Object Manager}
 \label{sec:objects}
 
 \subsection{Single-path dispatch}
 
-\code{HostRouter} is the only interface that may enter protected execution
-authority. Sync and async APIs share the same contracts. Every physical retry
+\code{HostRouter} is the sole protected dispatch entry on router-mediated
+framework paths; resource tools use the authorizer/dispatcher contract.
+Sync and async APIs share these contracts. Every physical retry
 receives a fresh request and decision; this matters because LangGraph wrappers
 may call their \code{execute} continuation repeatedly with changed arguments.
 Mediation outside that continuation would authorize one request and execute
@@ -466,35 +455,30 @@ authority cannot be assigned a public label.
 \subsection{Replaceable analysis under fixed policy}
 \label{sec:analysis}
 
-The analysis runtime owns a registry, scheduler, canonical storage, provenance,
-and scoped query interface. Plugins return findings and restrictive annotations;
-their result schema rejects policy, rule, and grant fields. Security modules
-interpret this evidence under configuration loaded before execution. Policies
-and their digest remain fixed across findings, retries, and checkpoint resumes.
-Approval remains input to one operation's existing permission chain and cannot
-override another module's denial.
+The analysis runtime supplies a registry, dependency scheduler, canonical store,
+provenance, and scoped query interface. Plugins return findings and restrictive
+annotations; the schema rejects policy, rule, and grant fields. Security modules
+interpret that evidence under a configuration fixed before execution. Approval
+cannot override another module's denial.
 
-Required analyzers finish in dependency order before the protected operation.
-Exceptions and deadlines produce unavailable evidence, not a clean finding;
-configured required-analysis gates deny the operation. Late results cannot commit.
-Every physical attempt binds a fresh snapshot to principal, session, normalized
-and actual arguments, invocation, attempt, and host execution identity. Historical
-query results cannot authorize a new execution. Developers and policy modules
-access scoped immutable views of the same canonical records.
+Required analyzers finish before the protected operation. Exceptions or deadlines
+produce unavailable evidence, so required-analysis gates deny. Late findings
+cannot commit. Every physical attempt binds a fresh snapshot to principal,
+session, normalized and actual arguments, invocation, and execution identity.
+Historical findings cannot authorize a new attempt.
 
-Provenance assigns identities to immutable value versions and records data and
-control dependencies. Confidentiality and risk labels accumulate; allowed-reader
-sets intersect. Opaque transformations retain all declared influences, and model
-responses conservatively inherit submitted context. Plugins may add restrictions
-and ancestry, not remove them. Trusted interpreter adapters can supply precise
-selection and control dependencies within their declared semantics.
-\code{AnalysisFlowPolicy} checks tools, model destinations, and output against
-these labels and trusted read bounds. No declassification API is enabled.
+Provenance identifies immutable value versions and records data/control
+dependencies. Confidentiality and risk labels join; allowed-reader sets
+intersect. Opaque transformations retain declared influences, and model outputs
+inherit submitted context. Plugins may add restrictions and ancestry, not
+remove them. Trusted interpreter adapters may supply more precise dependencies.
+\code{AnalysisFlowPolicy} checks tools, model destinations, and output using
+these labels and trusted read bounds; no declassification API is enabled.
 
-Findings and provenance commit transactionally in SQLite. Authenticated
-checkpoints bind policy, domain, and role configuration. Analyzers and adapters
-remain trusted code: the runtime does not prove detector accuracy or discover
-unreported native effects. Required coverage must be declared; unsupported
+SQLite transactions persist findings and provenance. Authenticated checkpoints
+bind policy, domain, and role configuration. This provides a stable enforcement
+interface for new analyses, not a proof of detector accuracy. Analyzer and
+adapter code remains trusted, and required coverage must be declared. Unadapted
 callbacks, reducers, caches, and custom nodes require adapters or refusal.
 
 \subsection{Certifying router placement}
@@ -532,6 +516,59 @@ Preparation is a separate trusted operation. Its output is normalized and
 reauthorized; a resource-changing transform must prove semantic attenuation over
 typed actions and selectors. String length, structural similarity, and module
 trust are not authority orderings.
+
+\begin{figure*}[t]
+\begin{minipage}[t]{0.47\textwidth}
+\textbf{(a) Manifest and principal policy excerpts}
+\begin{lstlisting}
+runs linux
+map operation=read db_record read @{record} need
+returns sensitive
+
+permit (
+  principal == slangGraph::User::"alice",
+  action in [
+    slangGraph::Action::"db_record::read",
+    slangGraph::Action::"db_record::write",
+    slangGraph::Action::"db_record::delete"
+  ], resource
+) when { resource.selector == "notes/alice" };
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\textbf{(b) Authority for Alice's read}
+\begin{lstlisting}
+request: operation=read, record=notes/alice
+grant line:
+  class_name = db_record
+  operation  = read
+  selector   = notes/alice
+obligations:
+  record operation -> SQLite mediator
+  direct DB access -> host confinement
+  broker identity  -> invocation-bound channel
+activation:
+  verify required evidence before worker GO
+\end{lstlisting}
+\end{minipage}
+\caption{Running example from the implemented SQLite demo. Left: the read
+manifest line and Alice's policy; the full manifest also maps write and delete.
+Right: a readable projection of the resulting contract, not a serialized grant
+or captured activation receipt. Other permissions in the policy do not enter
+this read invocation. The database and journal directory remain outside worker
+authority.}
+\label{fig:record-contract}
+\end{figure*}
+
+\paragraph{Alice's record.}
+Figure~\ref{fig:record-contract} makes the proposal/authority distinction concrete.
+For \code{operation=read}, the closed manifest map selects only the read action.
+Alice's policy admits \code{notes/alice}; replacing the argument with
+\code{notes/bob} removes the required line and denies before dispatch.
+A broader manifest still cannot supply Alice with Bob's entitlement. If sealed
+MAC forbids the surviving read, a local permit cannot restore it. A worker that
+requests Bob's record after authorization fails the broker's per-operation
+grant check; opening the database directly must fail at the host boundary.
 
 \subsection{A mandatory ceiling across local configurations}
 \label{sec:runtime-mac}
@@ -584,11 +621,16 @@ Activation establishes the resource boundary before tool import. Each broker
 request is authenticated to its worker invocation and checked against the
 surviving object, operation, and selector. Unsupported required authority or
 ambiguous adapter ownership denies execution; unsupported optional lines and
-their routes are removed. A handler's existence is not evidence of enforceability.
+their routes are removed. A handler's existence is not evidence of enforceability. For Alice's read,
+the SQLite mediator supplies the record check only if the host prevents direct
+database access and the broker channel binds requests to her invocation. Losing
+either dependency makes that required read unsupported.
 
 Typed resource contracts generate client methods, manifest effects, and backend
-signature checks. The pump mediator distinguishes inspecting, setting flow, and
-calibrating the same device even though every command traverses one socket.
+signature checks. The pump demo models a fluid pump through a local Unix-socket service. Inspect
+reads device state, set-flow changes its rate, and calibrate changes calibration;
+all use the same socket. The mediator distinguishes these operations when a
+socket allowlist cannot. The simulator itself does not enforce authorization.
 The SQLite mediator keeps the database and its journal files outside worker
 access and exposes only record read, write, and delete operations. Fixed
 parameterized statements and a SQLite authorizer enforce its fixed schema;
@@ -626,6 +668,13 @@ can be enforced exactly, conservatively tightened, explicitly degraded on a
 supporting path, or denied on different hosts. A packaged runtime does not
 supply a missing kernel mechanism. No adapter may replace an endpoint rule with
 ``network allowed'' or silently add a runtime dependency after policy.
+
+\paragraph{Execution status.}
+\code{ENFORCED} means all retained obligations passed activation and the
+requirement ledger remains satisfiable. \code{DEGRADED} records an eligible,
+explicitly waived obligation on a path that permits waivers; it carries no
+complete grant-subset claim. \code{INDETERMINATE} is an outcome whose commit or
+termination status cannot be established, not a weaker permission level.
 
 \subsection{Activation receipts}
 
@@ -696,38 +745,18 @@ the outcome is \code{INDETERMINATE} and flow reservations remain durable.
 \subsection{Versioned tool and runtime deployments}
 \label{sec:deployments}
 
-Flatpak separates application content from shared runtimes and uses OSTree to
-store and distribute versioned filesystem trees~\cite{flatpak,ostree}.
-\sys reuses this deployment model to identify the code admitted for a call.
-A tool bundle contains an entrypoint, explicitly packaged dependencies,
-read-only data, and a manifest in the same commit. A separate runtime commit
-can contain the interpreter, standard library, loader, and native libraries.
-This is a declaration and enforcement boundary: it does not infer policy or
-discover every dependency arbitrary code may load.
+The bubblewrap path uses OSTree to bind a tool bundle and its runtime to
+immutable commits~\cite{flatpak,ostree,bubblewrap}. The deployment manager resolves
+versions before authorization; grants, approval, activation, and audit retain
+those identities. Retries and authenticated checkpoint recovery reuse the
+selection while rerunning security checks. Packaged-runtime execution mounts
+the selected checkouts read-only rather than adding host interpreter directories.
 
-For a manager-backed call, a trusted deployment manager resolves the selected
-ref before policy preparation and records the exact commit against the
-principal, session, tool, and call identity. The grant keeps the primary-file
-digest and adds separate tool-deployment and runtime digests. Approval,
-activation evidence, and audit bind the selected versions. Retry and
-authenticated checkpoint recovery reuse the original selection while rerunning
-the applicable security checks. New calls may resolve a moved channel.
-
-The bubblewrap adapter mounts validated checkouts read-only and starts the
-selected runtime interpreter. In packaged-runtime mode it does not mount host
-\path{/usr}, \path{/lib}, or \path{/lib64}. The trusted worker shim remains
-separately pinned operator code. These bindings are not yet integrated into
-\code{LandlockSandboxExecutor}; its namespace-free path must not inherit the
-deployment path's claims or measurements.
-
-The manager also implements publisher-verified pulls, durable invocation
-references, and execution leases. These are mechanisms requiring further
-lifecycle validation, not evidence of complete deployment integrity. Current
-review priorities include separating mutable channel names from release names,
-making database-only retained commits visible to OSTree pruning, and requiring
-a manager or an explicit operator-retention contract for static deployment
-specifications. Read-only worker mounts do not protect a store writable by a
-malicious process with the manager's host identity.
+This binds declared packaged code, not arbitrary dependency closure. The store,
+runtime publisher, and pinned worker shim remain trusted. Invocation references
+and leases support retention, with lifecycle limits recorded in
+Appendix~\ref{app:component-evidence}. The namespace-free Landlock path has a
+separate code-selection contract.
 
 \section{Security Argument}
 \label{sec:argument}
@@ -738,12 +767,16 @@ adapter, and verified host evidence, in addition to the TCB and mechanism
 semantics in Section~\ref{sec:model}. A router certificate alone does not
 discharge those composition assumptions.
 
-\paragraph{No policy grant path.}
+\paragraph{Monotonic-authority invariant.}
 For a fixed principal, candidate, policy version, and relevant context, owner
 and principal/share policy construct candidate lines and mandatory policy can
 only restrict them. Preparation and delegation require semantic subset checks.
 A changed context requires fresh authorization; module order or a transform
-cannot itself add authority to the original candidate.
+cannot itself add authority to the original candidate. Thus authorization
+establishes $G\subseteq R$. Conservative lowering establishes $L\subseteq G$;
+complete mediation and correct enforcers establish $E\subseteq L$. Composition
+preserves Equation~\ref{eq:effect} by transitivity. The trusted baseline is part
+of $R$, so interpreter or broker dependencies cannot appear as unaccounted grants.
 
 \paragraph{No silent lowering expansion.}
 Every semantic rule and baseline line has exactly one enforcement disposition.
@@ -767,6 +800,10 @@ own operations; authorization for tool invocation does not authorize them.
 
 Under these assumptions, exact and tightened enforcement support
 Equation~\ref{eq:effect} for the covered routes and host authority domains.
+The application canaries and native-chain checks test instances of effect
+containment; the admission controls test changed bindings and missing manifest
+permissions. The metadata census tests a host capability boundary. These
+experiments do not discharge every inclusion for every resource mediator.
 This subset relation does not guarantee useful execution or successful
 completion. The current component evidence does not establish the assumptions
 for every adapter or upstream path, and is not a whole-system theorem.
@@ -776,132 +813,107 @@ for every adapter or upstream path, and is not a whole-system theorem.
 \section{Limitations}
 \label{sec:limitations}
 
-\paragraph{Placement is incomplete.}
-Adapters exist for the framework objects in Table~\ref{tab:objects}, but several
-general graph, state, checkpoint, completion-callback, and publication paths
-are not automatically routed. Direct Store references and legacy in-process
-compatibility paths remain outside the composed claim. Restricted in-process
-admission covers only its supported function bodies and monitored terminals.
+\paragraph{Coverage and trust.}
+The complete-mediation obligation applies to admitted deployments, not arbitrary
+LangGraph programs. General graph, backing-store, checkpoint-history, callback,
+and publication paths still have placement or composition gaps. Source-body
+admission covers its restricted function bodies and monitored terminals, not
+imports or arbitrary Python. Runtime MAC refuses unsupported graph shapes and
+requires trusted bootstrap in each interpreter; it is not machine-wide policy.
+Coordinator code, privileged brokers, kernels, and launchers remain trusted.
+Receipts are local software-rooted evidence, not remote hardware attestation.
 
-\paragraph{Deployment integrity has a separate boundary.}
-Version selection covers declared packaged contents, not inferred dependency
-closure, reproducible builds, or every input a tool might interpret as code.
-The operator must protect the store and separately trusted worker. Manager-free
-static specifications and incomplete pruning integration cannot carry the same
-automatic-retention claim as a fully validated manager-backed lifecycle.
-Deployment integration with Landlock remains open.
+\paragraph{Resource and flow semantics.}
+SQLite supports a fixed record schema, not arbitrary queries; the pump is a
+simulator with a trusted mediator. Other services need adapters at their resource
+boundary. Provenance covers instrumented dependencies and conservative read
+bounds, not unreported native effects. Classifier errors remain possible;
+an analyzer timeout prevents late commits but cannot forcibly terminate a
+Python thread. Landlock restricts live objects without providing snapshot
+integrity or general metadata hiding.
 
-\paragraph{Resource semantics remain adapter-specific.}
-The SQLite mediator supports its fixed record schema, not arbitrary queries or
-existing applications without adaptation. Pump and custom-resource backends
-remain trusted. Mail, cloud, and endpoint-scoped networking require suitable
-mediators; unsupported required grants deny rather than acquiring broad access.
-
-\paragraph{Analysis coverage and accuracy are separate.}
-Provenance tracks instrumented data and control dependencies, not arbitrary
-native effects. Unadapted provider callbacks, state transformations, and caches
-can lie outside tracking. Trusted read bounds must include baseline authority;
-labels on a return value cannot undo an earlier side effect. Classifier errors
-remain possible, and analysis is disabled unless configured. Analyzer plugins
-are trusted Python; a timed-out thread cannot be forcibly terminated, although
-its late findings cannot commit.
-
-\paragraph{Mandatory scope is explicit.}
-Sealed operator policy governs supported execution in one interpreter. Each
-controller must load it. Trusted code can still access the coordinator's host
-authority, so privileged brokers and callbacks must honor their contracts.
-Runtime MAC rejects unsupported graph shapes; this reduces compatibility and
-does not establish complete mediation for every LangGraph program.
-
-\paragraph{Evidence is local and software-rooted.}
-Receipts do not protect against a compromised kernel, launcher, policy backend,
-canonicalizer, label provider, or trusted module. The router analyzer is trusted
-and has regression tests, not a machine-checked soundness proof. Landlock
-constrains access to live objects; it does not provide snapshot integrity.
-
-\paragraph{Evaluation is not yet complete.}
-The application study has one protected integration and an initial three-task
-workload with unresolved utility failures. Its model-driven payload produces
-no forbidden attempts. The 49-case census and five verified-mode workloads do
-not establish arbitrary-Python coverage. More protected ports, multi-task and
-multi-host workloads, broader verified operations, resource-broker and flow-policy
-comparisons, runtime-MAC composition, races, and capability degradation remain
-necessary. Different executor implementations require separate measurements.
+\paragraph{Deployment and evaluation.}
+Versioned bundles cover declared contents, not inferred dependency closure.
+Store protection, static-specification retention, and pruning integration have
+separate assumptions; deployment binding is specific to the bubblewrap path.
+The evaluation has one protected application computation and narrow admitted-API
+coverage. The native chain uses a distinct exec-enabled profile, without a
+Landlock process-count ceiling. The execution-only replay omits authorization,
+audit, and model calls, so it cannot replace complete-path costs.
+One model-driven injection batch generates zero forbidden attempts and provides
+no conditional enforcement-success estimate. Broader protected applications,
+semantic-broker and sealed-MAC ablations, host changes, races, and persistent
+container reuse remain unmeasured on a single frozen release. Raw archives and
+that release remain necessary for a reproducible submission.
 
 \section{Related Work}
 
-\paragraph{Agent privilege and information flow.}
-Progent combines tool-call policies with policy generation and checked
-updates~\cite{progent}. CaMeL separates trusted control from untrusted data;
-SEAgent applies mandatory policy to agent interactions~\cite{camel,seagent}.
-FORGE provides provenance and instrumentation for its reference
-monitor~\cite{forgecode}. OPA's tool-calling integration evaluates structured
-requests before dispatch~\cite{opatools}. These systems establish policy and
-flow enforcement at the agent interface. \sys extends the enforcement boundary
-to invocation-specific resource authority inside tool execution. Its manifest
-and analysis interfaces let independently developed analyses reuse domain
-mediators, worker confinement, and framework flow checks.
+\paragraph{Agent policies and information flow.}
+Progent enforces tool-name/argument policies and checks whether generated
+updates narrow privileges or require approval~\cite{progent}. Conseca explores
+contextual, human-verifiable policy generation~\cite{conseca}; AgentSpec supplies
+trigger/predicate rules and runtime interventions~\cite{agentspec}. These are
+policy and enforcement contributions. \sys supplies a lower boundary for the
+effects of the implementation that an allowed call enters.
 
-\paragraph{Agent sandboxes and policy composition.}
-APF combines Cedar grants and control forbids, and projects authored sandbox
-policy through enforcement adapters~\cite{apf}. Nono provides caller-sensitive
-command sandboxes and protocol mediation; Sandlock confines local MCP tools from
-capability declarations~\cite{nono,sandlock}. These systems establish capability
-lowering for agents. \sys connects that execution control to manifest-derived
-requirements and principal authorization, with domain-operation mediators and a
-sealed mandatory policy across supported execution paths.
-Table~\ref{tab:features} summarizes the implemented mechanisms.
+CaMeL tracks dependencies in a restricted interpreter~\cite{camel}; FIDES
+tracks confidentiality and integrity with selective exposure of planner
+variables~\cite{fides}. Their flow precision exceeds \sys's conservative
+treatment of opaque transformations. SEAgent and FORGE/SASY enforce policies
+over agent interactions or event histories~\cite{seagent,forge}. \sys's
+instrumented provenance can carry such evidence to fixed policy, but this
+interface is not a reproduction of their analyses or guarantees.
+
+\paragraph{Isolation and policy projection.}
+IsolateGPT isolates hub and app processes, restricts syscalls and resources,
+and mediates collaboration with user permissions~\cite{isolategpt}. Its
+permission interface is complementary to our invocation-resource contract.
+Nono and Sandlock confine native tools without requiring restricted source
+admission~\cite{nono,sandlock}. APF supplies grants, mandatory forbids, and
+extensible projection to runtime enforcement surfaces~\cite{apf,apfprojection}.
+Its documented projection occurs when an authored bundle is loaded, rather
+than at each tool invocation. \sys additionally derives a principal-specific
+grant from requirements and binds its semantic and host obligations to execution.
+
+\paragraph{Confinement mechanisms.}
+Capsicum supplies capability-based confinement for UNIX~\cite{capsicum};
+gVisor interposes an application kernel to reduce host-kernel exposure~\cite{gvisor};
+Firecracker uses microVM isolation for serverless workloads~\cite{firecracker}.
+Our Linux adapters fit existing process deployments using Landlock, seccomp,
+and optionally bubblewrap. This choice does not establish superiority to VMs.
+These confinement mechanisms still need semantic brokers and a contract linking
+agent requirements to per-principal authority.
 
 \paragraph{Agent-security evaluation.}
-AgentDojo provides stateful tasks and indirect-prompt-injection security
-cases~\cite{agentdojo}. InjecAgent contains 1,054 cases over user and attacker
-tools~\cite{injecagent}; ASB spans multiple attack classes, scenarios, and
-hundreds of tools~\cite{asb}. These benchmarks primarily measure behavioral
-attack success and utility. Our canaries isolate whether an admitted
-implementation retains unauthorized authority; the questions are complementary.
+AgentDojo, InjecAgent, and ASB measure behavioral attack success and
+utility~\cite{agentdojo,injecagent,asb}. Our deterministic canaries instead isolate
+authority retained inside an approved implementation. An injection that produces
+no forbidden attempt cannot measure this conditional enforcement boundary.
 
 \paragraph{Reference monitors and hook placement.}
-EC separates compiler-driven compartment identification from ECK's runtime
-enforcement. ECK protects memory-protection configuration and verifies its small
-monitor~\cite{khan2023ec}. \sys adopts this separation for independently produced
-agent requirements: identifying authority does not enforce it, and the
-enforcement boundary must itself remain protected.
-Flask separates policy decisions in a security server from enforcement in object
-managers~\cite{spencer1999flask}. \sys applies that separation to invocation
-grants shared by framework objects, semantic resource mediators, and host adapters.
-LSM separates fixed mediation hooks from policy, preserves discretionary checks,
-and supports restrictive module composition~\cite{wright2002lsm,linuxlsm}.
-SELinux user-space object managers extend the same architecture beyond kernel
-objects~\cite{selinuxnotebook,sepgsql}. Prior work shows that authorization-hook
-placement itself requires systematic analysis~\cite{zhang2002cqual}. \sys
-adapts these ideas to framework objects and agent execution paths.
+EC separates compartment identification from ECK's enforcement and protects
+the monitor itself~\cite{khan2023ec}. Flask separates policy decisions from
+object-manager enforcement~\cite{spencer1999flask}; LSM provides fixed hooks for
+replaceable restrictive policies~\cite{wright2002lsm,linuxlsm}. User-space SELinux
+object managers extend that separation beyond kernel
+objects~\cite{selinuxnotebook,sepgsql}. \sys applies it to agent grants across
+framework and resource boundaries. Authorization-hook placement still needs
+independent analysis~\cite{zhang2002cqual}.
 
-\paragraph{Flatpak deployments and portals.}
-Flatpak provides application/runtime separation, versioned distribution, and
-mediated host access through portals~\cite{flatpak,ostree,portals}.
-Our deployment-backed adapter reuses OSTree and bubblewrap. The agent-specific
-work is connecting selected code to principal/request authorization, approval,
-activation evidence, and durable retry and checkpoint identity. Portal guidance
-on validated requests and trusted resource handles also informs future broker
-operations; a general desktop-portal integration is not implemented.
-
-\paragraph{Sandboxing and authorization.}
-Landlock provides unprivileged, monotonic restriction over filesystem and port
-objects~\cite{landlock}; seccomp restricts syscall classes~\cite{seccomp}. Cedar
-provides typed principal--action--resource--context policies with forbid-overrides
-composition~\cite{cedar}. \sys uses Cedar for authorization and Linux mechanisms
-for enforcement; neither is asked to model the other's domain.
+\paragraph{Deployments and authorization.}
+Flatpak/OSTree separate applications from shared runtimes; portals mediate host
+access~\cite{flatpak,ostree,portals}. \sys adds invocation identity and
+authorization to selected deployments. Cedar supplies typed authorization with
+forbid-overrides composition~\cite{cedar}; Linux mechanisms enforce the surviving
+resource authority. A general desktop-portal integration is outside this work.
 
 \section{Conclusion}
 
-Agent security requires policies to survive the transition from a model's
-request to a tool's effects. \sys makes that transition an explicit runtime
-contract: requirements become authorized invocation grants, and resource and
-host enforcers preserve those grants during execution. Independent analyses
-reuse this boundary through fixed policy and provenance interfaces. By combining
-semantic resource mediation, confined tool execution, and framework flow checks,
-\sys provides the enforcement foundation needed to build and deploy new agent
-defenses without rebuilding that infrastructure for each analysis.
+Agent policies must constrain effects after a request is approved. \sys turns
+manifest proposals and principal/operator policy into invocation grants enforced
+by runtime APIs, semantic brokers, and host adapters. Explicit lowering and
+activation preserve authority across those boundaries; independent analyses
+reuse the enforcement infrastructure.
 
 \bibliographystyle{plain}
 \bibliography{references}
@@ -937,45 +949,19 @@ for policy correctness, TCB maintenance, user notice, and recovery from
 
 \input{sections/component_evidence}
 
-\section{Artifact Claim Map}
+\section{Reviewed Prior-Work Scope}
+\label{app:prior-scope}
 
-\begin{itemize}
-  \item WIP resource and admission contracts:
-  \path{docs/security/object-classes.md},
-  \path{docs/security/manifest-consistency.md}, and
-  \path{libs/prebuilt/tests/security/test_runtime_mac.py}.
-  \item Analysis architecture, coverage, and reported validation:
-  \path{docs/security/analysis/}; demos:
-  \path{workspace/06_database}, \path{workspace/09_no_internet}, and
-  \path{workspace/10_repeat_after_me} through \path{workspace/18_analysis_evaluation}.
-  \item Layered status and open placement findings:
-  \path{docs/security/status.md} and
-  \path{docs/security/host-routing-completeness.md}.
-  \item Router and API verification: run \code{make security-verify} from
-  \path{libs/prebuilt}; checked reports live under \path{docs/security/}.
-  \item Linux enforcement: \path{libs/prebuilt/tests/security/test_landlock.py}
-  and \path{test_linux_execution.py}.
-  \item OSTree deployment implementation:
-  \path{libs/prebuilt/langgraph/prebuilt/security/deployment.py} and
-  \path{libs/prebuilt/tests/security/test_deployment.py}; development observations:
-  \path{docs/security/ostree-deployment-measurements.md}.
-  \item Current composition findings and failed completeness gates:
-  \path{docs/security/host-routing-completeness.md} and
-  \path{docs/security/developer-verification-report.json}.
-  \item Effect-gap canaries: \path{eval/reports/e2/}; static traces:
-  \path{eval/reports/e1/exposure.json}.
-  \item Application evaluation: \path{eval/apps.csv},
-  \path{eval/APPLICATIONS.md}, the Pandas scripts under \path{eval/scripts/},
-  and the separately identified cohorts under \path{eval/results/}.
-  The source archive and working-tree hashes are required in addition to the WIP pin.
-  \item Backend census and timings: \path{eval/reports/e6/isolation-v1/},
-  \path{runtime-v1/}, \path{operations-v1/}, and \path{verified-v2/};
-  report builder: \path{eval/scripts/paper_evaluation.py}.
-  \item Historical policy overhead: \path{libs/prebuilt/benchmarks/}.
-  \item Reproducibility identities: run-level host captures and source archives,
-  plus \path{eval/PINS.md}. The older \path{eval/HARDWARE.md} does not override
-  the measured cohort's host capture.
-\end{itemize}
+The mechanism comparison uses Progent source \code{07eb844}
+(tool-call proxy), CaMeL \code{f083b6b} (interpreter/native-tool boundary),
+FORGE/SASY \code{7dc9e52} (LangChain instrumentation), APF \code{77f5a239},
+nono \code{8db15c9}, and Sandlock \code{620b2de}. APF's official projection
+documentation was rechecked on October 26, 2026. IsolateGPT's process isolation
+and permission model follow its NDSS paper; FIDES follows the second arXiv
+revision. Source inspection establishes mechanisms, not comparative attack
+success. The canary package named \code{langchain-forge} is a different project
+from FORGE/SASY. The artifact README maps source contracts and each experiment
+to its revision and evidence files.
 
 \end{document}
 
