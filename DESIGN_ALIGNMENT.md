@@ -64,3 +64,39 @@ Run `make` and `make check`. Inspect the rendered pages and architecture diagram
 Check the LaTeX source and extracted PDF text for em dashes, unresolved references,
 and overflow. These are manuscript checks, not new implementation experiments.
 The implementation's historical numerical results were not rerun for this edit.
+
+
+## Motivation rewrite
+
+The merged paper at `46fba24ee4a8f19f3f589ccff7629f05a01e648d` supplied the
+unchanged design/evaluation baseline for this editorial revision.
+
+The abstract, introduction, motivation, related-work framing, and conclusion now
+center the missing reusable enforcement framework. Table 1 adapts the existing
+motivation/literature ledger's feature matrix, including the same implementation
+scope for grants/controls, invocation grants, dual tool paths, and independent
+requirement producers. Column labels are written out instead of relying on ten
+abbreviations. Configured sandbox boundaries are distinguished from grants derived
+from manifest requirements and principal authorization.
+
+The argument progresses through four requirements: bound effects inside tools;
+mediate domain operations finer than host objects; retain mandatory restrictions
+across local configurations; and allow new analyses to reuse those enforcers.
+The reporting/database example connects each missing mechanism to a concrete
+operation. The earlier audit-style escape-point table and proposed comparative
+experiment were removed from the motivation. Their substantive scope constraints
+remain in the security model, design, limitations, and submission checklist.
+
+Writing references reread for structure, not additional novelty claims:
+
+- [EC](https://arslan8.github.io/publications/ec.pdf): distinguish identifying
+  protection domains from enforcing them, compare concrete capabilities, and
+  derive design requirements from what the combination lacks.
+- [Stateful Least Privilege Authorization for the Cloud, USENIX Security 2024](https://www.usenix.org/system/files/usenixsecurity24-cao-leo.pdf):
+  connect an application need to missing authorization mechanisms and explain the
+  benefit to the developer.
+- [Endokernel, USENIX Security 2024](https://www.usenix.org/system/files/usenixsecurity24-yang-fangfei.pdf):
+  connect concrete enforcement omissions to design requirements and a capability
+  comparison. No security results from that paper are attributed to slangGraph.
+
+No new security experiments or benchmark results were added by this rewrite.

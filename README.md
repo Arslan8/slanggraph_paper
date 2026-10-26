@@ -17,8 +17,11 @@ The motivation centers on preserving mandatory restrictions from manifest
 requirements through invocation grants to actual effects. The manuscript now
 covers sealed runtime MAC, restricted in-process admission, typed domain
 mediators, SQLite record mediation, and the fixed-policy analysis/provenance
-runtime. Its comparison table distinguishes explicit configuration exceptions
-from trusted-tool and instrumentation boundaries.
+runtime. Table 1 is a capability matrix organized by policy/requirements, execution
+enforcement, and composition. The motivation explains why call authorization,
+process confinement, and flow policies need a shared invocation-grant contract;
+it then identifies the independent analysis and resource extension interfaces.
+Trust assumptions and coverage limits remain in the security model and evaluation.
 
 Historical canaries, router/API certificates, Linux tests, and benchmark medians
 retain their original source snapshots. They are not measurements of the latest
