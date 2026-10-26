@@ -267,3 +267,71 @@ remain the port count. Artifact requirements now include backend source identity
 raw samples, setup/admission costs, capability degradation, races, and multi-host
 and multi-task repetitions. The timing comparisons cannot be transferred between
 Landlock, bubblewrap, object brokers, or an unmeasured release revision.
+
+## Introduction: deployment-driven enforcement requirements
+
+The introduction now follows EC's argumentative progression: concrete applications
+and consequences, prior defenses and their scope, requirements imposed by actual
+deployment structures, the system design, measured results, and contributions.
+The separate Motivation section develops one record-reporting example instead of
+repeating the prior-work survey. No evaluation result or comparison-table marking
+is changed by this revision.
+
+New primary sources, checked October 26, 2026:
+
+- Replit Agent documentation supports building and deploying applications:
+  https://docs.replit.com/features/agent/overview . Existing pinned AI Data Science
+  Team and Open Notebook citations support database analysis and document research.
+- Browser Use's quick start documents local agents, hosted agents, and cloud browser
+  connections: https://docs.browser-use.com/cloud/quickstart .
+- LangChain's tools documentation defines Python function tools:
+  https://docs.langchain.com/oss/python/langchain/tools . Playwright's BrowserType
+  API documents launching browsers and connecting to Chrome through CDP:
+  https://playwright.dev/python/docs/api/class-browsertype . MCP's versioned
+  architecture specifies client/host/server messaging and local or remote servers:
+  https://modelcontextprotocol.io/specification/2025-06-18/architecture . These
+  sources establish deployment shapes, not security guarantees.
+- Jason Lemkin's first-person SaaStr report describes production database deletion
+  and code-freeze violations. The text attributes the report and does not claim
+  permanent data loss; the source also reports recovery and subsequent fixes:
+  https://www.saastr.com/replits-new-release-address-most-of-the-challenges-we-hit-vibe-coding-but-is-prosumer-vibe-coding-really-ready-for-commercial-apps-yet/ .
+- Amazon's incident response attributes a limited December 2025 Cost Explorer
+  interruption in one region to a misconfigured role. The paper preserves that
+  attribution, not the disputed claim that an AI bot took down AWS broadly:
+  https://www.aboutamazon.com/news/aws/aws-service-outage-ai-bot-kiro .
+- Anthropic's advisories document two patched sandbox escapes: configuration-file
+  injection, CVE-2026-25725, fixed in 2.1.2; and Git worktree path confusion,
+  CVE-2026-55607, fixed in 2.1.163. These establish disclosed vulnerabilities, not
+  observed exploitation or unpatched current releases:
+  https://github.com/anthropics/claude-code/security/advisories/GHSA-ff64-7w26-62rf
+  and https://github.com/anthropics/claude-code/security/advisories/GHSA-7835-87q9-rgvv .
+- Spencer et al., USENIX Security 1999, defines Flask's separation between policy
+  decisions in a security server and enforcement in object managers:
+  https://www.usenix.org/legacy/events/sec99/full_papers/spencer/spencer.pdf .
+  This is the security architecture, not the Python web framework. EC remains the
+  reference for the reference-monitor discussion in the Security Model.
+
+The three requirements are unified resource policy, lowering that depends on host
+capabilities and tool configuration, and composition of enforcing components.
+The current WIP's `docs/security/lowering.md` describes an obligation graph whose
+dependencies include host bypass prevention, credential custody, and authenticated
+broker transport. `docs/security/object-classes.md` describes the implemented
+ObjectBrokerDispatcher, ResourceMediatorAdapter, SQLite mediator, and restricted
+runtime path. These support the introduction's mapping from a common invocation
+grant to cooperating framework, resource, and host enforcers.
+
+"Distributed" refers to these participating enforcement components. It does not
+claim automatic protection of an unmodified remote MCP server, a completed Chrome
+adapter, universal OS support, or a globally deployed policy service. Remote
+effects still require a trusted resource-side enforcement point. Unsupported
+required obligations deny execution; optional authority may be removed without
+widening the grant. Runtime MAC remains scoped to the configured interpreter and
+trusted adapters. Analysis supplies requirements or evidence to policy; the design
+does not introduce runtime synthesis of arbitrary policy code.
+
+Prior-work wording distinguishes missing enforcement at a particular boundary
+from having no enforcement at all. In particular, APF retains credit for mandatory
+forbids and host adapters, CaMeL for its interpreter, and nono/Sandlock for process
+confinement. The gap is the shared invocation-grant contract across semantic
+resources, framework operations, and host execution, not the invention of policy
+composition or capability lowering themselves.

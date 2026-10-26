@@ -13,14 +13,22 @@ readability and font embedding, not venue compliance or evidence completeness.
 
 The current design baseline is `Arslan8/slanggraph:wip` at
 `40e24e978f9ec2e8f061abb21077e2251583f5e5` (October 25, 2026).
-The motivation centers on preserving mandatory restrictions from manifest
-requirements through invocation grants to actual effects. The manuscript now
-covers sealed runtime MAC, restricted in-process admission, typed domain
-mediators, SQLite record mediation, and the fixed-policy analysis/provenance
+The introduction follows EC's progression from cited applications and concrete
+failures to existing defenses, their enforcement boundaries, and the missing
+system contract. Runtime functions, Chrome companion processes, and MCP servers
+motivate three requirements: unified policy, host- and configuration-dependent
+lowering, and composite distributed reference monitoring. The design uses Flask's
+security-server/object-manager separation, with independent inference and
+enforcement interfaces. The contributions are the common grant contract, host
+adapters and composite lowering, and implementation and evaluation.
+
+The motivation develops these requirements through one record-reporting example.
+The manuscript covers sealed runtime MAC, restricted in-process admission, typed
+domain mediators, SQLite record mediation, and the fixed-policy analysis/provenance
 runtime. Table 1 is a capability matrix organized by policy/requirements, execution
-enforcement, and composition. The motivation explains why call authorization,
-process confinement, and flow policies need a shared invocation-grant contract;
-it then identifies the independent analysis and resource extension interfaces.
+enforcement, and composition. Prior systems receive credit for the boundaries they
+actually enforce. Chrome and remote MCP illustrate deployment requirements, not
+additional completed ports or experimental results.
 Trust assumptions and coverage limits remain in the security model and evaluation.
 
 Table 1 separately identifies language-based sandboxing. CaMeL receives credit

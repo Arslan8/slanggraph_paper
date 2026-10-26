@@ -44,23 +44,46 @@ agent-security analyses and policies can build.
 
 \section{Introduction}
 
-An agent framework turns model-generated requests into operations on files,
-databases, services, and other agents. Deploying such a system requires a
-security boundary that holds even when a prompt is malicious or a tool is
-compromised. The model may propose an operation; it must not determine the
-authority with which that operation executes. This requires three separate
-steps: identify the resources a tool needs, authorize those resources for the
-invoking principal, and constrain the implementation to the resulting authority.
+Agentic systems build and deploy software~\cite{replitagent}, analyze
+databases~\cite{aidatascienceteam}, conduct document
+research~\cite{opennotebook}, and automate browser tasks~\cite{browseruse}.
+These applications turn model outputs into operations on real resources,
+often using the files, credentials, and service connections of their users.
+A mistaken or adversarially induced action can therefore affect systems beyond
+the conversation.
 
-Recent defenses strengthen different steps. Progent checks programmable
-policies over tool calls, while CaMeL, SEAgent, and FORGE track agent actions or
-information flows~\cite{progent,camel,seagent,forgecode}. APF combines Cedar
-policies with enforcement adapters, and nono and Sandlock provide capability-based
-tool sandboxes~\cite{apf,nono,sandlock}. Yet a deployment needs these protections
-together. A call check cannot restrict an unmonitored read inside native tool
-code. A process sandbox cannot express which record in a permitted database the
-principal may read. Neither alone controls where a tool's result flows next.
-Table~\ref{tab:features} shows this separation in the compared systems.
+The consequences are already concrete. In 2025, SaaStr reported that Replit
+Agent deleted its production database and disregarded code-freeze
+instructions~\cite{saastrincident}. Amazon attributed a December 2025 Cost
+Explorer interruption in one region, discussed in its Kiro incident response,
+to misconfigured access controls~\cite{awscostincident}. Sandboxing alone also
+requires careful integration: Anthropic disclosed and patched Claude Code
+escapes through configuration-file injection and Git worktree path confusion
+in 2026~\cite{claudeconfigescape,claudeworktreeescape}. These cases motivate
+enforceable limits on an agent's effects, independent of whether the model
+follows instructions.
+
+Existing defenses address this problem at several boundaries. Progent and OPA
+authorize tool calls~\cite{progent,opatools}. CaMeL, SEAgent, and FORGE enforce
+policies over interpreted execution, agent interactions, or tracked information
+flows~\cite{camel,seagent,forgecode}. Nono and Sandlock confine tool processes
+using declared capabilities~\cite{nono,sandlock}. NVIDIA's Agent Policy Fabric
+(APF) combines programmable grants and mandatory forbids with enforcement
+adapters~\cite{apf}. These mechanisms provide useful enforcement, but at
+different scopes.
+
+The remaining gaps appear when execution crosses those scopes. A tool-call
+proxy checks the requested operation, while an approved native implementation
+can perform additional accesses~\cite{progentcode,opatools}. CaMeL's restricted
+interpreter does not confine its native callees; SDK and event-level mediation
+likewise depends on the tool implementation respecting the instrumented
+boundary~\cite{camelcode,seagent,forgecode}. Host sandboxes constrain files and
+processes, but a database-file permission cannot distinguish Alice's record
+from Bob's~\cite{nono,sandlock}. APF supplies policy-to-sandbox projection, but
+its reviewed integration does not bind manifest-derived invocation authority
+to domain mediators and framework operations through one enforcement
+contract~\cite{apf}. Table~\ref{tab:features} identifies these gaps. Improving
+policy inference alone does not close them.
 
 \begin{table*}[t]
 \centering
@@ -113,142 +136,126 @@ native code uses confinement. Flow tracking covers instrumented paths.}
 \label{tab:features}
 \end{table*}
 
-Consider a reporting agent that may read Alice's record and summarize it for an
-internal audience. Its tool accepts \code{record=alice}, passes a call policy,
-and then reads Bob's record from the same database. Restricting the tool to the
-database file does not prevent this read. Conversely, a correct record read
-still needs a destination check before its summary reaches an external model.
-The application must bind authorization to database operations, prevent direct
-file access around that binding, and preserve the data's restrictions after the
-tool returns. Improving the policy's inference does not supply these enforcement
-mechanisms.
+Deployment diversity makes this gap harder to close. An agent's tool may be
+(1) a function implemented entirely inside the framework
+runtime~\cite{langchaintools}, (2) a shim controlling a companion Chrome process
+through Playwright~\cite{playwrightbrowser}, or (3) an MCP client sending
+requests to a local or remote tool server~\cite{mcparchitecture}.
+Browser agents themselves can run locally or use cloud-hosted
+browsers~\cite{browseruse}. A check inside the agent runtime cannot by itself
+restrict a companion process or a remote server's resource accesses.
+Conversely, a sandbox around the client cannot express every operation performed
+on its behalf. A deployable defense must adapt to both the tool configuration
+and the host environment.
 
-\textbf{The missing piece is a reusable enforcement framework that carries
-resource authority from policy decisions into tool execution and subsequent
-agent operations.} Connecting a call guard to a sandbox is insufficient when
-they describe different resources, apply at different scopes, or use independently
-configured permissions. Without a shared contract, each integration must reconcile
-those differences and ensure that helpers, retries, and alternative execution
-paths do not recover authority that policy removed.
+This requires three properties together. \textbf{Unified policy} must describe
+the principal's authority over application resources, regardless of where a
+tool executes. \textbf{Host- and configuration-dependent lowering} must translate
+that authority into controls the selected execution environment can enforce,
+without granting extra access. \textbf{Composite distributed reference
+monitoring} must connect the checks at framework, process, and resource
+boundaries so that bypassing one interface does not recover forbidden authority.
+Here, distribution concerns the cooperating enforcement components; a remote
+resource still requires a trusted enforcement point at its boundary.
+The compared systems do not supply this common contract across all three
+properties (Table~\ref{tab:features}).
 
-We present \sys, an extensible security enforcement framework integrated into
-LangGraph. \sys constructs an invocation resource grant from the tool's
-manifest, the principal's authorization, and mandatory restrictions. It preserves
-that grant across a restricted in-process runtime, semantic resource mediators,
-and host-confined execution. In the reporting example, a trusted mediator owns
-the database, checks each record operation against the grant, and keeps the
-underlying files outside worker access. Provenance-aware policy governs the
-result's use at instrumented model and output boundaries. Operator policy is
-installed independently of graph-local configuration, so omitting a local check
-does not remove the mandatory restriction.
+To this end, we design \sys, an extensible security enforcement framework for
+LangGraph. Following Flask's separation of a security server from enforcing
+object managers~\cite{spencer1999flask}, \sys separates policy decisions from
+the mechanisms that control resources. Manifest requirements, principal
+authorization, and operator-owned mandatory restrictions produce one invocation
+grant. Framework object managers, domain mediators, and host adapters enforce
+that grant at their respective boundaries. Admitted in-process tool bodies use
+monitored APIs; untrusted native tools execute in confined workers. A database
+mediator can enforce record permissions while host confinement prevents direct
+access to the underlying database files. Instrumented model and output
+boundaries check subsequent uses of the result.
 
-The design separates \emph{security analysis} from \emph{security enforcement},
-following the LSM model of shared mediation points and replaceable security
-modules~\cite{wright2002lsm,linuxlsm}. Requirement inference can use static
-analysis, traces, or developer declarations. Runtime analyses can contribute
-classifications and provenance to preinstalled policies. Both reuse the same
-authorization and enforcement infrastructure. Adding a new detector does not
-require rebuilding the worker sandbox; adding a database or device mediator does
-not require replacing the policy analysis. This separation makes \sys a
-foundation for new agent defenses rather than a defense tied to one attack or
-inference technique.
+\sys lowers each grant into cooperating enforcement obligations according to
+the selected tool configuration and available host mechanisms. Lowering may
+preserve or reduce authority; an unsupported required obligation denies execution.
+Operator policy remains mandatory across supported paths in the configured
+interpreter. Separate analysis and enforcement interfaces let new requirement
+inference systems and runtime analyses reuse these mechanisms, following the
+extensible mediation model of LSM~\cite{wright2002lsm,linuxlsm}. Developers can
+add a resource adapter without replacing policy analysis, or add an analyzer
+without rebuilding confinement.
 
+Our evaluation connects these mechanisms to observable effects. In a Pandas
+application, host enforcement eliminates all three tested forbidden filesystem
+effects while retaining computation; authorization alone eliminates none.
+A separate 49-case backend census observes no forbidden effects under either
+host condition and retains all 30 positive-control trials per condition.
+Application replay takes $3.48\times$ upstream runtime. Separate application
+and backend profiles identify audit persistence and Cedar CLI evaluation as
+major costs.
+
+\begin{samepage}
 Our contributions are:
 \begin{itemize}
-  \item \textbf{A common authority contract.} We connect manifest requirements,
-  principal authorization, and mandatory restrictions through an invocation
-  grant shared by framework, resource, and host enforcement.
-  \item \textbf{An extensible enforcement runtime.} We implement independent
-  analysis and resource interfaces, restricted and confined tool execution,
-  sealed runtime MAC, and provenance-aware policy hooks in LangGraph.
+  \item \textbf{A common contract.} Invocation grants connect independently
+  supplied requirements, principal authorization, and mandatory policy to
+  framework, resource, and host enforcement.
+  \item \textbf{Host adapters and composite lowering.} We map grants to
+  configuration- and host-specific enforcement obligations, composing restricted
+  runtime APIs, domain mediators, and worker confinement without widening
+  authority.
   \item \textbf{An implementation and evaluation.} We instantiate the framework
-  with pump and SQLite mediators and fixed-policy analysis modules, and evaluate
-  application effect containment, a 49-case operation census, verified and host
-  execution costs, and component-level reference-monitor checks.
+  in LangGraph with pump and SQLite mediators and extensible analysis hooks,
+  and evaluate application effects, a 49-case backend census, execution costs,
+  and component-level reference-monitor checks.
 \end{itemize}
+\end{samepage}
 
 \section{Motivation}
 \label{sec:gap}
 
-Agent security has two complementary tasks: determining which authority an
-operation should receive, and ensuring that execution cannot exceed it.
-Table~\ref{tab:features} compares the mechanisms needed to connect these tasks.
-Its central distinction is not whether a system has policies or a sandbox, but
-whether it turns independently supplied requirements into an authorized resource
-grant and preserves that grant through execution.
+Consider a reporting agent authorized to read Alice's record and send a summary
+to an internal audience. Its tool accepts \code{record=alice}, passes a call
+policy, and then reads Bob's record from the same database. A file sandbox still
+allows this access if it grants the database file. Even a correct read can
+violate policy if the summary later reaches an unauthorized external model.
+This example exposes three requirements for an enforcement framework.
 
+\subsection{One policy across execution boundaries}
 
+The policy concerns a record and a destination, not a tool name or database
+pathname. \sys represents those permissions independently of execution placement.
+A manifest proposes requirements; principal policies authorize them; mandatory
+policy restricts the result. The resulting grant is the authority ceiling for
+the invocation. Omitting Bob's record from a manifest does not hide an access
+from enforcement, and declaring it does not make it authorized. Independent
+inference systems can therefore propose requirements without becoming the
+mechanism that constrains tool effects.
 
-\subsection{Call authorization does not constrain tool effects}
+\subsection{Lowering that follows the deployment}
 
-Progent and OPA can reject a forbidden tool name or argument before dispatch;
-CaMeL, SEAgent, and FORGE also reason about agent information
-flows~\cite{progent,opatools,camel,seagent,forgecode}. These mechanisms can stop
-an agent from requesting Bob's record. They do not by themselves stop an admitted
-native tool from reading it internally. The request remains unchanged while the
-implementation uses its ambient authority. Trusting every tool and its dependencies
-avoids this case only by placing them inside the security boundary.
+An admitted runtime implementation can use a grant-checked record API. A native
+worker needs a broker for that API and host controls preventing direct database
+access. These are different realizations of the same permission. A filesystem
+sandbox alone is too coarse; denying the database entirely also prevents the
+legitimate read. \sys's SQLite mediator checks record operations, while the
+host adapter protects the database directory and broker channel. The pump
+mediator similarly distinguishes device operations that share one socket.
+Adapters assess the concrete grant and host capabilities. Missing a required
+mechanism prevents execution instead of silently broadening the permission.
 
-\sys instead binds execution to the authorized resource grant. Restricted tools
-use admitted APIs that check the active grant. Untrusted native implementations
-run under host confinement and access protected domain resources through a broker.
-An omitted access is denied by enforcement; an overbroad declaration remains
-bounded by principal authorization and mandatory policy.
+\subsection{Monitors that compose without an escape path}
 
-\subsection{A sandbox does not supply application permissions}
-
-Nono and Sandlock confine tools using declared capabilities; APF projects sandbox
-policy through enforcement adapters~\cite{nono,sandlock,apf}. These systems
-provide host restrictions, but host objects and application permissions have
-different meanings. Allowing access to the reporting database permits access to
-its bytes, not just Alice's record. Similarly, a socket grant does not distinguish
-reading a pump's status from calibrating the pump. Blocking the file or socket
-entirely prevents the legitimate operation as well.
-
-The framework therefore needs resource-specific enforcement connected to the same
-policy decision. \sys's resource classes name domain operations, while mediators
-implement them against the invocation grant. The SQLite mediator keeps database
-files out of the worker and exposes only authorized record operations. The pump
-mediator checks device operations even though they share one socket. Host lowering
-then enforces the worker's remaining authority using available mechanisms,
-tightening or refusing requirements the host cannot represent safely.
-
-\subsection{Local checks do not establish a mandatory boundary}
-
-A policy that denies Bob's record must remain effective when a tool changes its
-internal call path or an application selects another execution configuration.
-Granting access through a helper or local sandbox override must not silently
-restore authority removed by operator policy. This is a distinct requirement
-from selecting a sandbox. For example, nono allows a per-intercept sandbox to
-replace and broaden its base configuration~\cite{nono}. APF already supplies
-mandatory control forbids alongside grants~\cite{apf}; the remaining integration
-question is how those decisions constrain the resources used inside an admitted
-tool.
-
-\sys seals operator policy independently of graph-local grants. Every supported
-object authorization includes that policy; unsupported execution routes are
-refused while runtime MAC is active. A new resource mediator must enforce the
-same invocation grant rather than install a parallel permission scheme. The
-mandatory scope is the configured interpreter, with trusted bootstrap and
-resource adapters, as specified in Section~\ref{sec:model}.
-
-\subsection{New analyses should reuse enforcement}
-
-The reporting agent may later need a prompt-injection classifier or a rule that
-keeps sensitive summaries away from public model providers. These analyses answer
-new security questions, but the required record checks, worker confinement, and
-output mediation are the same infrastructure. Wiring a separate guard into each
-tool does not make those mechanisms share identities, resource meanings, or
-policy precedence.
-
-\sys exposes separate extension points for requirements, runtime evidence,
-restrictive policy, and resource enforcement. A new analyzer supplies findings
-or provenance; a fixed policy decides how they constrain execution. A new
-resource adapter implements domain operations under the existing grant contract.
-The framework supplies authorization, mediation, and host enforcement. This is
-the gap identified by the final columns of Table~\ref{tab:features}: a common
-path from independently produced requirements to enforced invocation authority,
-so each new agent defense can build on the same security boundary.
+The database check must remain effective when the worker tries another API,
+and output restrictions must survive the tool's return. \sys composes host
+bypass prevention, authenticated broker requests, per-operation grant checks,
+and provenance-aware checks at instrumented framework boundaries. These checks
+share invocation authority rather than independent allowlists.
+Operator policy is sealed outside graph-local configuration, so a helper or
+local override cannot remove it on a supported path. This differs from nono's
+per-intercept replacement of base sandbox permissions~\cite{nono}; APF already
+provides mandatory forbids, but does not supply the shared domain and runtime
+grant contract~\cite{apf}. The mandatory scope is the configured interpreter
+and its trusted adapters (Section~\ref{sec:model}), not an unmodified remote
+server. New analyzers and resource mediators reuse this enforcement contract
+instead of reconstructing the security boundary for each defense.
 
 \section{Security Model}
 \label{sec:model}
@@ -859,6 +866,9 @@ enforcement. ECK protects memory-protection configuration and verifies its small
 monitor~\cite{khan2023ec}. \sys adopts this separation for independently produced
 agent requirements: identifying authority does not enforce it, and the
 enforcement boundary must itself remain protected.
+Flask separates policy decisions in a security server from enforcement in object
+managers~\cite{spencer1999flask}. \sys applies that separation to invocation
+grants shared by framework objects, semantic resource mediators, and host adapters.
 LSM separates fixed mediation hooks from policy, preserves discretionary checks,
 and supports restrictive module composition~\cite{wright2002lsm,linuxlsm}.
 SELinux user-space object managers extend the same architecture beyond kernel
