@@ -6,10 +6,12 @@ Implementation baseline: `Arslan8/slanggraph:wip`,
 
 ## Claims changed
 
-- Motivation now connects a concrete SQLite record violation to three boundaries:
-  native tool effects, resource semantics, and mandatory restrictions across local
-  configuration and execution routes. The comparison is about enforcement scope,
-  not a blanket claim that competitors lack MAC or cannot be extended.
+- Motivation makes manually maintained policy translations a security concern:
+  they can omit a check, broaden a resource permission, or lose a mandatory
+  restriction during an override. Concrete Table 1 examples connect these failures
+  to one invocation grant shared by framework, resource, and host enforcers.
+  The comparison concerns enforcement scope, not a blanket claim that competitors
+  lack MAC or cannot be extended.
 - Resource classes and pump/SQLite/custom mediators are implemented, not proposed.
   SQLite supports a fixed record schema, not arbitrary SQL. Resource backends and
   protected-path configuration remain trusted.
@@ -406,3 +408,41 @@ No framework experiment was rerun. Raw cohort archives remain unavailable in
 the reviewed paper repository. The student's additional evaluation is still
 needed to substantiate semantic mediation, MAC composition, host changes,
 container reuse, and broader application utility.
+
+## Security motivation: manual policy propagation (October 26, 2026)
+
+The motivation derives the common-grant requirement from concrete failures of
+policy consistency. Correct local monitors can compose unsafely when developers
+must copy a restriction into another object model, enforcement route, or override.
+The introduction states this claim briefly; Section 2 supplies the examples.
+
+| Example | Evidence and classification | Security requirement |
+| --- | --- | --- |
+| Progent approves a call whose implementation reaches an unauthorized sink | The pinned proxy checks tool name/arguments before invoking the implementation. Eight deliberately vulnerable historical canaries, including SQL, are already reported in Section 9.2. These are measured boundary cases, not incorrect policy decisions or new experiments. | Bound the approved implementation's effects, not only its advertised call. |
+| CaMeL invokes a native tool from its restricted interpreter | The pinned AgentDojo adapter calls the underlying runtime at lines 229-238. This is a source-backed scope statement, not a claim that its interpreter/IFC checks fail. | Language-based orchestration checks do not themselves confine native callees. |
+| Alice-only SQLite access translated to a database-file grant | Illustrative consequence of file versus record granularity. A record broker is bypassable if a separate host profile grants direct database access. No matched nono/Sandlock exploit or new SQLite experiment is claimed. | Share record authority between semantic mediation and host bypass prevention. |
+| APF network permission without a content-policy route | Official Dev documentation identifies hosts reachable at Layer 1 but absent from the APF middleware mapping as receiving no content decision. The rejection-bypass consequence follows from that documented condition; it was not reproduced here. APF retains credit for signed admission, mandatory forbids, projection, and egress mediation. | Validate required checks against every admitted execution route; a common signed bundle alone does not establish semantic agreement. |
+| nono base policy tightened while an intercept retains write access | The pinned auth-switch example grants configuration-file writes and GitHub networking. Its override replaces the selected sandbox and need not narrow it. The later base-policy-edit scenario illustrates the documented semantics, not an adversary editing policy or a reproduced exploit. | Mandatory restrictions must survive local grants without manually updating every override. |
+
+Rechecked primary sources:
+
+- Progent: `lindsey98/progent@07eb84451d4a2ccff1643b6b50216c7e3c868584`,
+  `secagent/progent_proxy.py`, lines 293-308. The canary experiment retains its
+  own historical revision in the evaluation record.
+- CaMeL: `google-research/camel-prompt-injection@f083b6b396399d3b3c7f2ddaf613a5945eaf32d8`,
+  `src/camel/pipeline_elements/agentdojo_function.py`, lines 229-238.
+- nono: `nolabs-ai/nono@8db15c939053374d9c6c6ad12365e25ee0552e95`,
+  `docs/cli/features/tool-sandbox.mdx`, Per-Intercept Sandbox Override.
+- APF projection: https://docs.nvidia.com/agent-policy-fabric/how-it-works/policy-projection .
+  Cedar goes to APF's evaluator; authored SandboxPolicy documents project to
+  OpenShell's sandbox surface.
+- APF enforcement scope: https://docs.nvidia.com/agent-policy-fabric/security/enforcement-coverage-and-limitations .
+  The motivating example is the documented missing middleware route. The paper
+  does not claim APF permits a request already denied by its evaluator.
+
+The common grant is an enforcement contract, not identical syntax at every layer.
+Principal authorization and mandatory policy cap proposed requirements; lowering
+binds required checks and bypass prevention to execution. Trusted adapters and
+supported-path scope remain explicit. This revision changes no comparison-table
+marks or evaluation measurements. Repetition in the introduction was shortened
+to accommodate the expanded motivation within the body budget.
