@@ -1,0 +1,57 @@
+\section{Component Evidence and Coverage}
+\label{app:component-evidence}
+
+The design baseline is LangGraph 1.2.12 with WIP \code{40e24e9}. Historical
+canaries and component checks use \code{53c5d317} or their separately recorded
+snapshots. They are not a release gate for the new evaluation adapters.
+
+\paragraph{Canary scope.}
+The eight vulnerable tools use disposable files, synthetic records, and loopback
+services. Calls generated once by local Qwen3-8B are replayed unchanged.
+Progent and the Eydii, Forge, and Nuggets wrappers reach all eight unauthorized
+sinks; Forge here means \code{langchain-forge} 0.2.0, not FORGE/SASY.
+A separate CaMeL post-validation path-resolution case reaches one sink. This is
+a narrow 1/1 reproduction, not a general bypass of CaMeL's flow model.
+The static capability-to-sink model projects eight exposures to four under its
+host model and zero under composition. Those projections include capabilities
+beyond the measured filesystem adapter and are not runtime blocking results.
+
+\paragraph{Passing components and open composition.}
+The historical router certificate verifies 21 catalogued dispatch obligations
+under source-bound helper contracts. Tool API conformance passes 15,744 cases,
+and a focused router/object/host run passes 151 tests. These checks support
+specific routes and assumptions, not complete mediation of every framework API.
+
+Source review records backing-store reads without effective-value mediation
+(\code{SGV107}) and checkpoint-history publication without per-tuple envelope
+and principal/session authentication (\code{SGV108}). These are source findings,
+not executed bypasses. Placement, adapter composition, and host/isolation
+obligations (\code{SGV901}--\code{SGV903}) remain open; the recorded completeness
+gates fail despite the router certificate. The protected inventory is maintained
+independently of the checker, so these paths cannot disappear from the ledger.
+
+The checked-in analysis record reports 42 analysis tests and 123 security
+regressions passing. Its full prebuilt run has 3,701 passed, 58 failed, and four
+skipped; all 58 failures report unavailable bubblewrap user-namespace isolation.
+That host did not validate those paths. Runtime-MAC source tests exercise
+precompiled graphs, unsecured tools, trust promotion, raw Pregel, remote
+execution, wrappers, and policy installation. SQLite/pump and fixed-policy flow
+fixtures establish implemented interfaces; their broader composition and utility
+require the new release-level experiments.
+
+\paragraph{Deployment scope.}
+The deployment suite uses a fake OSTree command, with some real-sandbox tests.
+A separate development record exercises real OSTree 2024.5 and bubblewrap:
+tool/runtime selection, checkpoint restart, and signed versus unsigned commits.
+It is not a frozen reproducible lifecycle study. Protecting the store, retaining
+database-only referenced commits during pruning, and validating static deployment
+retention remain separate obligations.
+
+\paragraph{Cost history.}
+The earlier application diagnostic attributes 98.1\% of B's non-subprocess
+time to synchronous SQLite audit. The synthetic host profile attributes
+65.8--66.2\% of total dispatch to Cedar CLI filtering and 24.4--24.9\% to
+worker execution/supervision. These identify implementation costs, not measured
+optimization gains. Historical no-op policy-only and deployment timings remain
+in the archived evidence ledger rather than serving as current overhead claims.
+

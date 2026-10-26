@@ -1,0 +1,232 @@
+\section{Evaluation}
+\label{sec:evaluation}
+
+We evaluate authority preservation (Goal~\ref{goal:policy}), the work each
+execution path admits (Goal~\ref{goal:lowering}), and complete-path and component
+costs (Goal~\ref{goal:overhead}). Extensibility (Goal~\ref{goal:extensibility})
+currently has mechanism evidence. We separate the protected Pandas integration from newer
+evaluation adapters; their authority, implementation, and timing scopes differ.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/application-runtime.pdf}
+  \caption{Protected Pandas integration: runtime relative to upstream A.
+  Left: complete computation replay, 100 calls/configuration, without model
+  calls. Right: five full workflows/configuration, including model and runner
+  work. Whiskers are SDs divided by the fixed A mean, not ratio confidence
+  intervals. The two panels have different timing scopes.}
+  \label{fig:application-runtime}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/backend-runtime.pdf}
+  \caption{Common-authorizer comparison: 100 calls/workload/mode in five sessions.
+  Left: ratio of mean runtime to verified mode; no ratio intervals are inferred.
+  Right: paired added time and reported session-level 95\% intervals.
+  The authorizer is common to all modes; host launch, execution, transport, and
+  validation differ. Static admission and container lifecycle are separate.}
+  \label{fig:backend-runtime}
+\end{figure*}
+
+\subsection{Setup and protocol}
+
+The host has a Xeon w5-3435X (16 cores, 32 logical CPUs), 62.25~GiB RAM,
+Linux 6.17.0-1033-oem, and rotating ext4 storage. Application and worker processes
+are pinned to CPU~0. Frequency and caches are uncontrolled on this nonexclusive
+host. Backend Python is 3.12.3; Pandas uses 3.13.11 and local Qwen3-8B Q4\_K\_M
+at temperature zero. Appendix~\ref{app:application-details} gives the application
+configuration and source identities.
+
+The new comparison has three modes. \textbf{Verified} uses production source
+admission, Cedar object authorization, binding validation, and grant-checked
+\code{read\_text}. \textbf{Landlock} translates the same authorizer's grants
+into filesystem restrictions around a fresh Python child, with the production
+minimal seccomp allowlist, cleared environment, and resource limits.
+\textbf{Container} uses rootless Docker with a read-only root, explicit mounts,
+no network or capabilities, no-new-privileges, memory/PID ceilings, and the same
+seccomp profile. It launches a fresh Python process in a persistent grant-specific
+container. These two host adapters record parent observations and worker
+telemetry, not production activation receipts.
+
+Each new timing workload/mode has 100 measured calls in five fresh benchmark
+sessions of 20 calls. Each session excludes ten warmups and retains a separate
+first-use observation. Modes and calls are shuffled in matched rounds; parent
+oracles check every positive result. Intervals are Student-$t$ 95\% intervals
+over five session mean paired differences ($df=4$), not 100 independent calls.
+They assume approximately independent, normally distributed session means;
+adjacent sessions on one host may remain correlated. Ratios divide reported
+means. Raw samples are not reconstructed from these aggregates.
+
+\subsection{Where call checks stop}
+\label{sec:effect-gap}
+
+\paragraph{Policy-conformant canaries.}
+Eight deliberately vulnerable tools perform file read/write, shell, SQL, fetch,
+email, chat, and delegation operations beyond the authority of their accepted
+arguments. Frozen calls reach all eight unauthorized sinks after Progent
+approves them. Each of three generic LangChain wrappers also admits all eight.
+The package named \code{langchain-forge} in this experiment is distinct from
+FORGE/SASY in Table~\ref{tab:features}. These historical canaries test an
+implementation boundary outside the call policy's scope; they do not show that
+Progent evaluates those policies incorrectly. Appendix~\ref{app:component-evidence}
+preserves their original revision and the separately identified static models.
+
+\paragraph{Protected application.}
+We retain the Pandas Data Analyst graph, prompts, generated computation, and
+upstream sandbox program~\cite{aidatascienceteam}. A runs that original sandbox
+with security disabled. B adds a \code{ToolNode} authorization boundary.
+C uses the same boundary and runs the sandbox program through the production
+bubblewrap executor. The upstream AST/import/builtin checks remain; C replaces
+the outer subprocess launch.
+
+Inside a legitimate February computation, A and B reach all three supported
+forbidden effects: two narrow-profile reads and a read-only dataset overwrite.
+C reaches none. All 15 case/profile executions return the correct result, and
+the permitted broad-profile read succeeds. Each cell has one execution.
+A separate outside-fixture write leaves the host unchanged under C but succeeds
+in private \code{/tmp}; it is excluded from the three-probe count because it
+tests host containment, not a guest-wide output-only policy. B and C also pass
+four dispatch checks, including denial of a guest principal, a missing argument,
+and an unknown tool. Correct call checks and implementation confinement therefore
+answer different security questions.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/execution-cost.pdf}
+  \caption{Execution-only comparisons against a fresh plain Python child.
+  Left: ratio of mean runtime for Pandas replay and the opaque native chain.
+  Right: paired added time with session-level 95\% intervals.
+  Each workload/mode has five sessions of 20 measured calls.
+  Neither experiment includes Cedar or durable audit; native execution uses a
+  separate exec-enabled profile. Container lifecycle is excluded.}
+  \label{fig:execution-cost}
+\end{figure*}
+
+\subsection{What each execution path can enforce}
+
+\paragraph{Operation and surface census.}
+The new census has 49 forbidden cases and ten allowed controls, each repeated
+three times per mode. Plain execution reaches all 49 forbidden effects.
+Landlock reaches one, \code{stat\_metadata}; the container reaches none.
+Both host modes preserve all 30 allowed-control trials. Landlock's result is
+48/49 effects removed (97.96\%); the container removes 49/49 on this corpus.
+
+The outcome breakdown matters. Of 147 forbidden trials, Landlock has three
+observed effects, 132 explicit denials, six generic errors, and six no-effect
+results. The container has 132 explicit denials, six generic errors, and nine
+no-effect results. An error or empty result is not credited as an explicit
+policy denial. In particular, denying file-content access does not automatically
+hide names or metadata. An adapter for a metadata-confidentiality requirement
+needs another enforcing mechanism or must declare that requirement unsupported.
+The census identifies this capability difference; it does not demonstrate that
+the production negotiation path already detects it.
+
+\paragraph{Admitted APIs and opaque binaries.}
+The common-authorizer benchmark admits a constant, reads of 32~B, 4~KiB, and
+64~KiB, and two 32~B reads. The sizes vary work, not API coverage. Production
+verified-mode controls exercise allowed reads, ungranted path arguments,
+changed callable bindings, and missing manifest permissions. The checker rejects
+all 16 raw-API microbenchmark programs, so we assign none a successful
+verified-mode timing.
+
+A separate exec-enabled profile permits process creation, execution, and waiting.
+The chain \code{/usr/bin/env} $\rightarrow$ \code{/bin/cat} successfully returns
+an allowed canary in every host timing call, without verifying either binary's
+source. In 15 hidden-file checks per mode, plain execution discloses the canary;
+both host profiles prevent disclosure. Source admission rejects the raw
+subprocess tool. This demonstrates Goal~\ref{goal:lowering}'s need for a
+confinement path alongside restricted language execution. This profile differs from the minimal
+census: in particular, its Landlock configuration has no process-count quota.
+
+\paragraph{Application utility.}
+The original three-task Pandas workload passes 1/3 tasks in A, B, and C,
+retaining upstream aggregation and chart failures. Later repetitions of the
+working February task pass 5/5 in each condition. The integration uses a 200-line
+adapter, a 20-line worker, and a 135-line backend adapter shared with SQL;
+engineering hours were not recorded. SQL passes 3/3 baseline tasks, but schema
+sampling reveals a payroll canary to the prompt before query execution.
+Open Notebook passes one baseline ingestion/chat smoke task. These two are
+baseline adaptations, not protected ports. Their metadata and server/storage
+paths explain why a protected query or client alone is insufficient.
+
+\subsection{Cost of the complete path and its components}
+\label{sec:cost}
+
+\paragraph{Protected application.}
+The earlier complete Pandas replay includes dispatch, execution, synchronous
+audit, and integration output, with 100 calls per configuration after ten
+warmups. Mean runtimes are 267.19~ms (A), 545.54~ms (B), and 930.93~ms (C).
+B/A is $2.04\times$ (+104.2\%); C/A is $3.48\times$ (+248.4\%), an added
+663.74~ms. Five clean full workflows per condition take 12.777~s for A and
+15.354~s for C: $1.202\times$ (+20.2\%), an added 2.577~s. These totals include
+setup, model execution, tracing, and outcome checks; they are observed workflow
+costs, not isolated enforcement overhead.
+
+
+\paragraph{Same authorizer, different execution.}
+Figure~\ref{fig:backend-runtime} holds the production Cedar authorizer constant.
+Verified execution takes 13.70--20.53~ms; Landlock takes 67.45--75.65~ms
+($3.62$--$4.92\times$ verified, +262--392\%), adding 53.74--55.39~ms.
+The container takes 114.68--123.43~ms ($5.98$--$8.37\times$, +498--737\%),
+adding 100.98--103.18~ms. Unlike the historical production-path comparison,
+this experiment does not mix policy frontends.
+
+
+Cedar contributes 13.1--20.6~ms in these runs. Execution/transport contributes
+0.14--0.30~ms in verified mode, 53.92--55.54~ms with Landlock, and
+101.56--103.21~ms in the container. Static admission averages 7.65--9.81~ms
+per tool and is excluded from invocation timing. This supports
+Goal~\ref{goal:overhead} for the admitted constant/read workloads: the language
+path avoids worker launch and transport while retaining Cedar. It does not
+accept arbitrary Python or establish low overhead for every application.
+
+\paragraph{Execution-only ablations.}
+The new Pandas replay runs the original computation and sandbox with explicit
+fixture/runtime grants. It excludes model calls, \code{ToolNode}, Cedar, and
+durable audit. Plain, Landlock, and container means are 352.32, 353.53, and
+507.87~ms. Landlock's point estimate is $1.0034\times$ (+0.34\%), with a paired
+increment of 1.204~ms and interval $[-6.621,9.030]$~ms, which includes zero.
+The container is $1.4415\times$ (+44.15\%), adding 155.551~ms
+$[148.937,162.165]$. This isolates execution costs; it is not a reduction of
+the complete framework's overhead.
+
+For the native chain, Landlock adds 1.132~ms ($1.019\times$, +1.85\%) and the
+container adds 50.149~ms ($1.820\times$, +81.98\%). The 16 raw-operation
+variants add $-0.123$ to 1.429~ms with Landlock and 49.188--51.430~ms with the
+container. Many Landlock intervals include zero. Figure~\ref{fig:execution-cost}
+shows the execution-only comparisons; Appendix~\ref{app:backend-details}
+retains every operation and the uncertainty in milliseconds.
+
+
+\paragraph{Lifecycle and optimization targets.}
+Container setup averages 1.20--1.72~s and teardown 1.04--1.54~s across the three
+cohorts, with five or ten containers per cohort. Persistent namespaces amortize
+these costs; a one-shot invocation must include them. Fresh workers do not by
+themselves establish safe namespace reuse after a grant or principal changes.
+
+Earlier profiles identify separate integration costs: audit persistence accounts
+for 98.1\% of B's time outside its original subprocess, while Cedar CLI filtering
+accounts for 65.8--66.2\% of total synthetic host dispatch without durable audit.
+Those denominators differ from the new common-authorizer study. They motivate
+optimization of policy processes and audit persistence, but do not measure the
+benefit of such changes.
+
+\subsection{Reference-monitor evidence and remaining scope}
+
+For requirement~\ref{req:verifiability}, a historical router analysis checks 21
+dispatch obligations; Tool API conformance
+covers 15,744 cases; a focused router/object/host run passes 151 tests. The current
+source includes typed SQLite/pump mediators and sealed-MAC regression cases.
+These establish component mechanisms, while the complete placement gates retain
+unresolved paths. Appendix~\ref{app:component-evidence} separates passing checks
+from unavailable-host failures and open composition findings.
+
+The present evidence supports one protected application computation and finite
+backend workloads. Semantic-mediator ablations, dishonest-manifest/MAC
+composition, host-capability changes, persistent-container reuse, and broader
+protected workloads remain unmeasured on one frozen release. End-to-end reuse
+by an independent requirement producer (Goal~\ref{goal:extensibility}) also
+remains to be evaluated.
+Section~\ref{sec:limitations} states the resulting claim boundaries.
+

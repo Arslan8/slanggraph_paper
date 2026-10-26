@@ -1,0 +1,119 @@
+\section{Alternative Backend Details}
+\label{app:backend-details}
+
+Tables~\ref{tab:common-authorizer} and~\ref{tab:execution-ablation} retain the
+reported rounded timing aggregates. Each workload/mode has 100 measured calls
+in five sessions. Added time and its 95\% interval use paired differences;
+rounding can make the difference of displayed means differ by 0.001~ms.
+Intervals use five session means, not individual calls. The mean ratio is a
+point estimate; no ratio confidence interval is inferred.
+
+The container image digest, source archives, and per-session observations are
+named in the supplied report. The paper repository preserves that report
+byte-for-byte and checks its hash before generating figures. Raw archives have
+not yet been incorporated into the paper artifact; the tabulated intervals are
+reported values, not independently recomputed intervals. Docker cpuset was
+unavailable: taskset ran before Python startup and every worker's reported
+CPU-0 affinity was checked. Container and host Python environments differ as
+documented in the source report.
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llrrrrrrl@{}}
+\toprule
+Workload & Mode & Mean & SD & Median & P95 & Ratio & Added & Session 95\% CI \\
+\midrule
+Constant & Verified & 13.702 & 2.995 & 12.449 & 20.208 & $1.000\times$ & n/a & n/a \\
+Constant & Landlock & 67.454 & 7.467 & 65.228 & 85.414 & $4.923\times$ & 53.751 & [49.918, 57.585] \\
+Constant & Container & 114.680 & 11.173 & 111.070 & 139.402 & $8.370\times$ & 100.977 & [93.927, 108.028] \\
+\addlinespace
+Read 32 B & Verified & 20.456 & 3.272 & 19.721 & 27.273 & $1.000\times$ & n/a & n/a \\
+Read 32 B & Landlock & 74.770 & 9.132 & 71.497 & 95.875 & $3.655\times$ & 54.313 & [49.660, 58.967] \\
+Read 32 B & Container & 122.623 & 13.218 & 117.574 & 149.701 & $5.994\times$ & 102.166 & [91.772, 112.561] \\
+\addlinespace
+Read 4 KiB & Verified & 20.528 & 3.609 & 19.446 & 27.847 & $1.000\times$ & n/a & n/a \\
+Read 4 KiB & Landlock & 74.270 & 7.694 & 71.971 & 91.878 & $3.618\times$ & 53.741 & [49.705, 57.777] \\
+Read 4 KiB & Container & 122.826 & 12.980 & 117.760 & 151.533 & $5.983\times$ & 102.297 & [94.741, 109.854] \\
+\addlinespace
+Read 64 KiB & Verified & 20.253 & 3.695 & 18.837 & 29.013 & $1.000\times$ & n/a & n/a \\
+Read 64 KiB & Landlock & 75.646 & 8.662 & 72.956 & 94.453 & $3.735\times$ & 55.393 & [50.162, 60.623] \\
+Read 64 KiB & Container & 123.434 & 13.094 & 118.357 & 145.813 & $6.095\times$ & 103.180 & [94.398, 111.963] \\
+\addlinespace
+Two reads & Verified & 20.096 & 3.444 & 18.802 & 26.711 & $1.000\times$ & n/a & n/a \\
+Two reads & Landlock & 75.079 & 9.173 & 71.545 & 93.968 & $3.736\times$ & 54.983 & [49.777, 60.188] \\
+Two reads & Container & 123.018 & 13.363 & 118.188 & 144.278 & $6.122\times$ & 102.922 & [93.641, 112.202] \\
+\bottomrule
+\end{tabular*}
+\caption{Common production authorizer with different execution paths. All durations are milliseconds; ratios use the verified mean for the same workload. Static admission and container lifecycle are excluded.}
+\label{tab:common-authorizer}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llrrrrrrl@{}}
+\toprule
+Workload & Mode & Mean & SD & Median & P95 & Ratio & Added & Session 95\% CI \\
+\midrule
+Pandas replay & Plain & 352.320 & 39.197 & 346.444 & 406.212 & $1.000\times$ & n/a & n/a \\
+Pandas replay & Landlock & 353.525 & 39.857 & 355.437 & 403.961 & $1.003\times$ & 1.204 & [-6.621, 9.030] \\
+Pandas replay & Container & 507.871 & 40.053 & 519.650 & 567.372 & $1.442\times$ & 155.551 & [148.937, 162.165] \\
+\addlinespace
+Native chain & Plain & 61.168 & 7.627 & 65.889 & 69.353 & $1.000\times$ & n/a & n/a \\
+Native chain & Landlock & 62.299 & 8.007 & 68.043 & 71.157 & $1.018\times$ & 1.132 & [0.459, 1.804] \\
+Native chain & Container & 111.316 & 9.920 & 118.428 & 122.048 & $1.820\times$ & 50.149 & [47.603, 52.695] \\
+\bottomrule
+\end{tabular*}
+\caption{Execution-only workloads. All durations are milliseconds; ratios use the plain-process mean. Neither workload includes Cedar, durable audit, or model calls. The native chain uses its separate exec-enabled profile.}
+\label{tab:execution-ablation}
+\end{table*}
+
+\paragraph{Operation variants.}
+Figure~\ref{fig:operation-overhead} shows all 16 successful raw-API variants.
+Compared with a fresh plain Python child, Landlock mean ratios range from
+$0.998$ to $1.025\times$ and container ratios from $1.824$ to $1.894\times$.
+All programs are rejected by the actual source-admission checker; rejected
+programs are not given useful-operation timing results. The separately reported
+body times include Python/API wrappers and open/close work, so are not pure
+syscall overheads.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/operation-overhead.pdf}
+  \caption{Added whole-call time for raw-operation variants, without Cedar or
+  durable audit. Each mode/variant has 100 measured calls in five sessions.
+  Whiskers are reported session-level 95\% intervals for paired increments.
+  Panels use different x-axis ranges to expose Landlock's intervals around zero.}
+  \label{fig:operation-overhead}
+\end{figure*}
+
+\paragraph{Lifecycle.}
+The common-authorizer cohort creates ten containers: setup mean 1302.591~ms
+(SD 70.392), teardown 1037.445~ms. The operation cohort creates five:
+1197.466~ms (SD 74.900), teardown 1539.833~ms. The application cohort creates
+five: 1720.825~ms (SD 1021.362), teardown 1501.668~ms. These are separate
+lifecycle observations, not 100 invocation measurements or a measured cold-start
+latency for every workload.
+
+\paragraph{Verified controls.}
+The report describes four control categories and 12/12 controls, each repeated
+three times. Pending the raw ledger, we report the categories rather than
+treating twelve as either distinct cases or a uniquely determined trial count.
+Admission, binding, and allowed-read checks cover a different boundary from
+the 49 forbidden host cases.
+
+\paragraph{Historical cohorts.}
+The earlier backend census found 0/49 effects for its two host conditions:
+135 explicit denials, six generic SQLite errors, and six empty/absent results
+per 147 trials. It is not the new Landlock/container census, which has 132
+explicit-denial trials per adapter and a Landlock metadata effect.
+Earlier synthetic host/trusted timings were $15.30$--$15.63\times$; the
+production Linux/verified comparison ranged from $11.60\times$ to
+$17.31\times$ but used
+different policy frontends. The new common-authorizer experiment replaces that
+comparison in the main argument. Historical source reports and aggregate JSON
+remain archived; their absolute values, profiles, and sample counts are not
+pooled with the new cohorts.

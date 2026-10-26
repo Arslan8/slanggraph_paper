@@ -1,0 +1,587 @@
+{
+  "source_file": "paper_evaluation_source.md",
+  "source_sha256": "4b993da71c49fdc1e9ac3cbc8062a0ddab066f56731731756d2d21593cdd9930",
+  "evidence_type": "Reported aggregates; referenced raw samples and source archives were not supplied",
+  "security": {
+    "conditions": [
+      "Trusted",
+      "Helper",
+      "Host",
+      "Host + helper"
+    ],
+    "forbidden_cases": 49,
+    "reached_cases": [
+      49,
+      49,
+      0,
+      0
+    ],
+    "repetitions_per_case": 3,
+    "host_trials": 147,
+    "host_explicit_denials": 135,
+    "host_sqlite_errors": 6,
+    "host_empty_or_absent": 6,
+    "host_positive_controls_passed": 30,
+    "host_positive_control_trials": 30,
+    "direct_language_controls_rejected": 27,
+    "direct_language_control_trials": 30,
+    "scope": "Counts apply separately to each host condition. Synthetic helper and direct-language conditions are not the production verified mode."
+  },
+  "runtime": [
+    {
+      "workload": "arithmetic",
+      "condition": "trusted",
+      "n": 100.0,
+      "mean": 28.14,
+      "sd": 3.18,
+      "variance": 10.12,
+      "median": 28.85,
+      "p95": 31.15
+    },
+    {
+      "workload": "arithmetic",
+      "condition": "language_helper",
+      "n": 100.0,
+      "mean": 28.14,
+      "sd": 2.98,
+      "variance": 8.89,
+      "median": 28.99,
+      "p95": 31.59
+    },
+    {
+      "workload": "arithmetic",
+      "condition": "host",
+      "n": 100.0,
+      "mean": 430.63,
+      "sd": 50.82,
+      "variance": 2582.42,
+      "median": 445.93,
+      "p95": 480.34
+    },
+    {
+      "workload": "arithmetic",
+      "condition": "host_language_helper",
+      "n": 100.0,
+      "mean": 428.47,
+      "sd": 50.3,
+      "variance": 2530.32,
+      "median": 445.78,
+      "p95": 476.11
+    },
+    {
+      "workload": "allowed_read",
+      "condition": "trusted",
+      "n": 100.0,
+      "mean": 27.72,
+      "sd": 3.52,
+      "variance": 12.37,
+      "median": 28.97,
+      "p95": 31.15
+    },
+    {
+      "workload": "allowed_read",
+      "condition": "language_helper",
+      "n": 100.0,
+      "mean": 28.1,
+      "sd": 3.43,
+      "variance": 11.74,
+      "median": 29.09,
+      "p95": 31.27
+    },
+    {
+      "workload": "allowed_read",
+      "condition": "host",
+      "n": 100.0,
+      "mean": 433.31,
+      "sd": 45.59,
+      "variance": 2078.02,
+      "median": 447.36,
+      "p95": 478.07
+    },
+    {
+      "workload": "allowed_read",
+      "condition": "host_language_helper",
+      "n": 100.0,
+      "mean": 431.74,
+      "sd": 49.1,
+      "variance": 2411.28,
+      "median": 448.03,
+      "p95": 481.5
+    },
+    {
+      "workload": "allowed_small_file",
+      "condition": "trusted",
+      "n": 100.0,
+      "mean": 27.92,
+      "sd": 3.5,
+      "variance": 12.27,
+      "median": 29.12,
+      "p95": 31.96
+    },
+    {
+      "workload": "allowed_small_file",
+      "condition": "language_helper",
+      "n": 100.0,
+      "mean": 28.16,
+      "sd": 3.26,
+      "variance": 10.6,
+      "median": 29.09,
+      "p95": 31.5
+    },
+    {
+      "workload": "allowed_small_file",
+      "condition": "host",
+      "n": 100.0,
+      "mean": 433.61,
+      "sd": 52.87,
+      "variance": 2795.11,
+      "median": 447.99,
+      "p95": 491.47
+    },
+    {
+      "workload": "allowed_small_file",
+      "condition": "host_language_helper",
+      "n": 100.0,
+      "mean": 431.19,
+      "sd": 49.51,
+      "variance": 2451.25,
+      "median": 446.89,
+      "p95": 481.22
+    }
+  ],
+  "paired_runtime": [
+    {
+      "workload": "arithmetic",
+      "contrast": "host-trusted",
+      "increment": 402.49,
+      "sd": 48.52,
+      "variance": 2354.13,
+      "overhead_pct": 1430.2
+    },
+    {
+      "workload": "arithmetic",
+      "contrast": "host_language_helper-language_helper",
+      "increment": 400.33,
+      "sd": 48.69,
+      "variance": 2370.87,
+      "overhead_pct": 1422.6
+    },
+    {
+      "workload": "arithmetic",
+      "contrast": "host_language_helper-host",
+      "increment": -2.16,
+      "sd": 34.06,
+      "variance": 1160.1,
+      "overhead_pct": -0.5
+    },
+    {
+      "workload": "allowed_read",
+      "contrast": "host-trusted",
+      "increment": 405.59,
+      "sd": 43.06,
+      "variance": 1854.05,
+      "overhead_pct": 1463.4
+    },
+    {
+      "workload": "allowed_read",
+      "contrast": "host_language_helper-language_helper",
+      "increment": 403.64,
+      "sd": 46.73,
+      "variance": 2183.56,
+      "overhead_pct": 1436.6
+    },
+    {
+      "workload": "allowed_read",
+      "contrast": "host_language_helper-host",
+      "increment": -1.57,
+      "sd": 32.98,
+      "variance": 1087.41,
+      "overhead_pct": -0.4
+    },
+    {
+      "workload": "allowed_small_file",
+      "contrast": "host-trusted",
+      "increment": 405.69,
+      "sd": 50.68,
+      "variance": 2568.25,
+      "overhead_pct": 1452.9
+    },
+    {
+      "workload": "allowed_small_file",
+      "contrast": "host_language_helper-language_helper",
+      "increment": 403.03,
+      "sd": 47.8,
+      "variance": 2284.6,
+      "overhead_pct": 1431.3
+    },
+    {
+      "workload": "allowed_small_file",
+      "contrast": "host_language_helper-host",
+      "increment": -2.43,
+      "sd": 31.65,
+      "variance": 1001.6,
+      "overhead_pct": -0.6
+    }
+  ],
+  "host_stages": [
+    {
+      "workload": "arithmetic",
+      "stage": "attest",
+      "mean": 7.621,
+      "sd": 0.423,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "grant",
+      "mean": 7.764,
+      "sd": 0.432,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "negotiate",
+      "mean": 23.643,
+      "sd": 6.99,
+      "share_pct": 5.5
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "other_invoke",
+      "mean": 0.361,
+      "sd": 0.053,
+      "share_pct": 0.1
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "outside_invoke",
+      "mean": 0.949,
+      "sd": 0.149,
+      "share_pct": 0.2
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "policy",
+      "mean": 285.193,
+      "sd": 34.782,
+      "share_pct": 66.2
+    },
+    {
+      "workload": "arithmetic",
+      "stage": "worker",
+      "mean": 105.096,
+      "sd": 12.909,
+      "share_pct": 24.4
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "attest",
+      "mean": 7.604,
+      "sd": 0.383,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "grant",
+      "mean": 7.804,
+      "sd": 0.494,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "negotiate",
+      "mean": 23.495,
+      "sd": 4.041,
+      "share_pct": 5.4
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "other_invoke",
+      "mean": 0.37,
+      "sd": 0.047,
+      "share_pct": 0.1
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "outside_invoke",
+      "mean": 1.049,
+      "sd": 0.361,
+      "share_pct": 0.2
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "policy",
+      "mean": 285.139,
+      "sd": 31.127,
+      "share_pct": 65.8
+    },
+    {
+      "workload": "allowed_read",
+      "stage": "worker",
+      "mean": 107.848,
+      "sd": 12.597,
+      "share_pct": 24.9
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "attest",
+      "mean": 7.672,
+      "sd": 0.592,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "grant",
+      "mean": 7.776,
+      "sd": 0.449,
+      "share_pct": 1.8
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "negotiate",
+      "mean": 23.349,
+      "sd": 4.295,
+      "share_pct": 5.4
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "other_invoke",
+      "mean": 0.372,
+      "sd": 0.056,
+      "share_pct": 0.1
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "outside_invoke",
+      "mean": 1.001,
+      "sd": 0.257,
+      "share_pct": 0.2
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "policy",
+      "mean": 286.062,
+      "sd": 36.01,
+      "share_pct": 66.0
+    },
+    {
+      "workload": "allowed_small_file",
+      "stage": "worker",
+      "mean": 107.382,
+      "sd": 14.616,
+      "share_pct": 24.8
+    }
+  ],
+  "setup": [
+    {
+      "workload": "arithmetic",
+      "mean": 30.52,
+      "sd": 2.51
+    },
+    {
+      "workload": "allowed_read",
+      "mean": 30.72,
+      "sd": 2.46
+    },
+    {
+      "workload": "allowed_small_file",
+      "mean": 30.61,
+      "sd": 2.93
+    }
+  ],
+  "operations": [
+    {
+      "operation": "compute_control",
+      "baseline_mean": 27.35,
+      "host_mean": 415.82,
+      "increment": 388.47,
+      "increment_sd": 41.21,
+      "increment_variance": 1698.07,
+      "ratio": 15.2
+    },
+    {
+      "operation": "open_read",
+      "baseline_mean": 27.71,
+      "host_mean": 419.09,
+      "increment": 391.39,
+      "increment_sd": 34.62,
+      "increment_variance": 1198.26,
+      "ratio": 15.13
+    },
+    {
+      "operation": "pathlib_read",
+      "baseline_mean": 32.96,
+      "host_mean": 413.02,
+      "increment": 380.06,
+      "increment_sd": 48.81,
+      "increment_variance": 2382.69,
+      "ratio": 12.53
+    },
+    {
+      "operation": "os_read",
+      "baseline_mean": 27.28,
+      "host_mean": 417.45,
+      "increment": 390.17,
+      "increment_sd": 40.02,
+      "increment_variance": 1601.26,
+      "ratio": 15.3
+    },
+    {
+      "operation": "mmap_read",
+      "baseline_mean": 27.61,
+      "host_mean": 420.91,
+      "increment": 393.3,
+      "increment_sd": 38.64,
+      "increment_variance": 1493.07,
+      "ratio": 15.25
+    },
+    {
+      "operation": "ctypes_read",
+      "baseline_mean": 30.32,
+      "host_mean": 409.75,
+      "increment": 379.43,
+      "increment_sd": 43.42,
+      "increment_variance": 1885.08,
+      "ratio": 13.51
+    },
+    {
+      "operation": "stat_metadata",
+      "baseline_mean": 26.53,
+      "host_mean": 421.31,
+      "increment": 394.78,
+      "increment_sd": 41.89,
+      "increment_variance": 1755.06,
+      "ratio": 15.88
+    },
+    {
+      "operation": "listdir_names",
+      "baseline_mean": 27.67,
+      "host_mean": 412.79,
+      "increment": 385.12,
+      "increment_sd": 40.29,
+      "increment_variance": 1623.54,
+      "ratio": 14.92
+    },
+    {
+      "operation": "write",
+      "baseline_mean": 26.7,
+      "host_mean": 416.33,
+      "increment": 389.64,
+      "increment_sd": 41.48,
+      "increment_variance": 1720.5,
+      "ratio": 15.6
+    },
+    {
+      "operation": "append",
+      "baseline_mean": 27.15,
+      "host_mean": 409.88,
+      "increment": 382.72,
+      "increment_sd": 44.73,
+      "increment_variance": 2000.88,
+      "ratio": 15.1
+    },
+    {
+      "operation": "truncate",
+      "baseline_mean": 27.57,
+      "host_mean": 415.87,
+      "increment": 388.3,
+      "increment_sd": 40.25,
+      "increment_variance": 1620.18,
+      "ratio": 15.09
+    },
+    {
+      "operation": "create",
+      "baseline_mean": 27.18,
+      "host_mean": 419.69,
+      "increment": 392.51,
+      "increment_sd": 34.74,
+      "increment_variance": 1206.78,
+      "ratio": 15.44
+    },
+    {
+      "operation": "unlink",
+      "baseline_mean": 27.29,
+      "host_mean": 415.49,
+      "increment": 388.21,
+      "increment_sd": 44.82,
+      "increment_variance": 2009.24,
+      "ratio": 15.23
+    },
+    {
+      "operation": "mkdir",
+      "baseline_mean": 27.42,
+      "host_mean": 410.84,
+      "increment": 383.42,
+      "increment_sd": 42.82,
+      "increment_variance": 1833.56,
+      "ratio": 14.98
+    },
+    {
+      "operation": "write_4kib",
+      "baseline_mean": 27.44,
+      "host_mean": 413.37,
+      "increment": 385.92,
+      "increment_sd": 43.3,
+      "increment_variance": 1875.14,
+      "ratio": 15.06
+    },
+    {
+      "operation": "fsync",
+      "baseline_mean": 28.16,
+      "host_mean": 426.57,
+      "increment": 398.41,
+      "increment_sd": 34.87,
+      "increment_variance": 1215.6,
+      "ratio": 15.15
+    }
+  ],
+  "verified": [
+    {
+      "workload": "constant_control",
+      "verified_mean": 18.479,
+      "host_mean": 319.774,
+      "increment": 301.295,
+      "increment_sd": 36.116,
+      "ratio": 17.31
+    },
+    {
+      "workload": "read_32b",
+      "verified_mean": 28.466,
+      "host_mean": 330.207,
+      "increment": 301.74,
+      "increment_sd": 37.792,
+      "ratio": 11.6
+    },
+    {
+      "workload": "read_4kib",
+      "verified_mean": 27.83,
+      "host_mean": 331.581,
+      "increment": 303.751,
+      "increment_sd": 34.993,
+      "ratio": 11.91
+    },
+    {
+      "workload": "read_64kib",
+      "verified_mean": 27.344,
+      "host_mean": 360.6,
+      "increment": 333.256,
+      "increment_sd": 40.938,
+      "ratio": 13.19
+    },
+    {
+      "workload": "two_reads_32b",
+      "verified_mean": 28.13,
+      "host_mean": 330.491,
+      "increment": 302.361,
+      "increment_sd": 35.602,
+      "ratio": 11.75
+    }
+  ],
+  "scopes": {
+    "runtime": "10 warmups, 100 measured calls per condition/workload, separately retained first call; fresh worker each call; construction/preflight outside timer; no model or durable audit sink; shuffled paired rounds, seed 20261026.",
+    "stages": "Exclusive partition of host dispatch. Other-invoke is a residual. Policy includes Cedar serialization, CLI validation and per-rule authorization processes. Worker includes launch, confinement, execution and teardown. Do not sum stage variances.",
+    "operations": "5 warmups, 50 matched samples per variant. Plain Python subprocess baseline; fresh host worker; successful whole calls, not syscall overhead. Inner-body timings are referenced but not present in this supplied report.",
+    "verified": "5 warmups, 50 paired samples. Production source admission, binding validation and grant-checked read_text versus Linux execution. Both use real Cedar, with different policy frontends. Executors reused; host workers fresh; setup/static admission excluded and referenced separately.",
+    "dispersion": "Reported SDs describe sequential within-host jitter, not task variation. Ratios may use greater precision than the rounded means; paired SDs are not reconstructed from marginal statistics."
+  }
+}

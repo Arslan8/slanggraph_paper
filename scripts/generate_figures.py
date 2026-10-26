@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
+import json
+import os
+import tempfile
 from pathlib import Path
 
 import matplotlib as mpl
@@ -19,6 +24,8 @@ def _configure() -> None:
     mpl.rcParams.update(
         {
             "font.family": "serif",
+            "font.serif": ["STIXGeneral"],
+            "mathtext.fontset": "stix",
             "font.size": 8,
             "axes.labelsize": 8,
             "axes.titlesize": 9,
@@ -34,10 +41,23 @@ def _configure() -> None:
 
 
 def _save(fig: plt.Figure, name: str) -> None:
-    """Save one vector figure and close it."""
+    """Publish a complete vector PDF before LaTeX can read the destination."""
     FIGURES.mkdir(parents=True, exist_ok=True)
-    fig.savefig(FIGURES / name)
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="pdf")
     plt.close(fig)
+    payload = buffer.getvalue()
+    if not payload.endswith(b"%%EOF\n"):
+        raise ValueError(f"Incomplete generated PDF: {name}")
+    with tempfile.NamedTemporaryFile(dir=FIGURES, suffix=".tmp", delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        temporary.replace(FIGURES / name)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _box(
@@ -228,12 +248,319 @@ def overhead() -> None:
     _save(fig, "overhead.pdf")
 
 
+def _application_metrics() -> dict:
+    """Load reported aggregates and verify their archived source identity."""
+    evidence = ROOT / "evidence"
+    data = json.loads((evidence / "application_macrobenchmarks_summary.json").read_text())
+    digest = hashlib.sha256((evidence / data["source_file"]).read_bytes()).hexdigest()
+    if digest != data["source_sha256"]:
+        raise ValueError("The application report changed; review plotted aggregates.")
+    return data
+
+
+def _backend_metrics() -> dict:
+    evidence = ROOT / "evidence"
+    data = json.loads((evidence / "backend_evaluation_summary.json").read_text())
+    digest = hashlib.sha256((evidence / data["source_file"]).read_bytes()).hexdigest()
+    if digest != data["source_sha256"]:
+        raise ValueError("Backend report changed; review and reimport its aggregates.")
+    return data
+
+
+def application_effects(data: dict, backend: dict) -> None:
+    """Keep application and backend case denominators visibly separate."""
+    effects = data["controlled_effects"]
+    security = backend["security"]
+    labels = [f"{c}  {d}" for c, d in zip(
+        data["configurations"], data["configuration_descriptions"], strict=True)]
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 1.95))
+    panels = [
+        (effects["forbidden_effects_reached"],
+         effects["supported_forbidden_probes_per_configuration"], labels,
+         "(a) Pandas computation", [0, 1, 2, 3]),
+        (security["reached_cases"], security["forbidden_cases"],
+         security["conditions"], "(b) Synthetic backend census", [0, 10, 20, 30, 40, 49]),
+    ]
+    for ax, (values, denominator, names, title, ticks) in zip(axes, panels, strict=True):
+        bars = ax.barh(range(len(values)), values, height=0.58,
+                       color=["#cfcfcf", "#8f8f8f", "#303030", "#303030"][:len(values)],
+                       edgecolor="black", linewidth=0.6)
+        ax.set_xlim(0, denominator * 1.07)
+        ax.set_xticks(ticks)
+        ax.set_xlabel("Forbidden effects reached (distinct cases)")
+        ax.set_title(title, fontweight="bold", pad=7)
+        ax.set_yticks(range(len(values)), names)
+        ax.grid(axis="x", color="#d0d0d0", linewidth=0.45)
+        ax.set_axisbelow(True)
+        ax.spines[["top", "right"]].set_visible(False)
+        for bar, value in zip(bars, values, strict=True):
+            ax.text(value - denominator * 0.025 if value else denominator * 0.025,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{value}/{denominator}", va="center",
+                    ha="right" if value else "left", fontweight="bold")
+        ax.invert_yaxis()
+    fig.tight_layout(w_pad=2.2)
+    _save(fig, "application-effects.pdf")
+
+
+def application_runtime(data: dict) -> None:
+    """Normalize means and SDs by each cohort's fixed upstream mean."""
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.15))
+    panels = [
+        (data["local_replay"], "(a) Computation replay, 100 calls/config.",
+         "Runtime relative to A", 4.2, 2),
+        (data["full_workflow"], "(b) Full workflow, 5 runs/config.",
+         "Runtime relative to A", 1.5, 3),
+    ]
+    for ax, (cohort, title, ylabel, ymax, decimals) in zip(axes, panels, strict=True):
+        baseline = cohort["mean"][0]
+        means = [v / baseline for v in cohort["mean"]]
+        scaled_sd = [v / baseline for v in cohort["sd"]]
+        bars = ax.bar(range(3), means, yerr=scaled_sd,
+                      capsize=3, width=0.57,
+                      color=["#cfcfcf", "#8f8f8f", "#303030"],
+                      edgecolor="black", linewidth=0.6,
+                      error_kw={"elinewidth": 0.8, "capthick": 0.8})
+        ax.set_xticks(range(3), data["configurations"])
+        ax.set_ylim(0, ymax)
+        ax.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}×"))
+        ax.axhline(1, color="#505050", linewidth=0.65, linestyle="--")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontweight="bold", pad=8)
+        ax.grid(axis="y", color="#d0d0d0", linewidth=0.45)
+        ax.set_axisbelow(True)
+        ax.spines[["top", "right"]].set_visible(False)
+        for bar, mean, sd in zip(bars, means, scaled_sd, strict=True):
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    mean + sd + 0.025 * ymax, f"{mean:.{decimals}f}×",
+                    ha="center", va="bottom", fontsize=8, fontweight="bold")
+    fig.tight_layout(w_pad=2.1)
+    _save(fig, "application-runtime.pdf")
+
+
+def audit_breakdown(data: dict, backend: dict) -> None:
+    """Show two measured bottlenecks without pooling their denominators."""
+    cohort = data["audit_diagnostic_b"]
+    extra = cohort["mean_total"] - cohort["mean_subprocess"]
+    audit_pct = 100 * cohort["mean_audit"] / extra
+    other_pct = 100 - audit_pct
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.45))
+    ax = axes[0]
+    ax.barh(0, audit_pct, height=0.5, color="#303030", edgecolor="black", linewidth=0.6)
+    ax.barh(0, other_pct, left=audit_pct, height=0.5, color="white", edgecolor="black", linewidth=0.6)
+    ax.text(audit_pct / 2, 0, f"Audit persistence: {audit_pct:.1f}%",
+            ha="center", va="center", fontsize=7.5, color="white")
+    ax.annotate(f"Other: {other_pct:.1f}%", xy=(100 - other_pct / 2, 0.26),
+                xytext=(100, 0.64), ha="right", va="center", fontsize=7,
+                arrowprops={"arrowstyle": "-", "lw": 0.6})
+    ax.set_title("(a) Application B diagnostic, n=20", fontweight="bold", fontsize=8.5)
+    ax.set_ylim(-0.5, 0.9)
+    ax.set_yticks([])
+    ax.set_xlabel("Share of time outside subprocess (%)")
+
+    ax = axes[1]
+    workloads = ["arithmetic", "allowed_read", "allowed_small_file"]
+    stage_rows = backend["host_stages"]
+    groups = [(["policy"], "Policy", "#303030", None),
+              (["worker"], "Worker", "#b0b0b0", None),
+              (["negotiate"], "Negotiation", "white", "///"),
+              (["attest", "grant", "other_invoke", "outside_invoke"],
+               "Other prep./dispatch", "white", None)]
+    for i, workload in enumerate(workloads):
+        rows = {r["stage"]: r["mean"] for r in stage_rows if r["workload"] == workload}
+        total = sum(rows.values())
+        left = 0.0
+        for stages, label, color, hatch in groups:
+            value = 100 * sum(rows[k] for k in stages) / total
+            ax.barh(i, value, left=left, height=0.54, color=color,
+                    edgecolor="black", hatch=hatch, linewidth=0.55,
+                    label=label if i == 0 else None)
+            if stages in [["policy"], ["worker"]]:
+                ax.text(left + value / 2, i, f"{value:.1f}%", ha="center", va="center",
+                        fontsize=6.8, color="white" if stages == ["policy"] else "black")
+            left += value
+    ax.set_yticks(range(3), ["Arithmetic", "Read", "Write 4 KiB"])
+    ax.invert_yaxis()
+    ax.set_xlabel("Share of total dispatch (%)")
+    ax.set_title("(b) Synthetic host, n=100/workload", fontweight="bold", fontsize=8.5)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=2,
+              fontsize=6.5, frameon=False, handlelength=1.8, columnspacing=1)
+    for ax in axes:
+        ax.set_xlim(0, 102)
+        ax.set_xticks([0, 25, 50, 75, 100])
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+    fig.tight_layout(w_pad=2.5)
+    _save(fig, "audit-breakdown.pdf")
+
+
+def backend_runtime(data: dict) -> None:
+    """Plot only reported mean ratios; paired dispersion stays in the appendix."""
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.45))
+    ax = axes[0]
+    workloads = ["arithmetic", "allowed_read", "allowed_small_file"]
+    contrasts = [("host-trusted", "Host / trusted", "#303030", -0.18),
+                 ("host_language_helper-language_helper", "Host + helper / helper", "#b0b0b0", 0.18)]
+    for contrast, label, color, offset in contrasts:
+        values = [next(r["overhead_pct"] for r in data["paired_runtime"]
+                       if r["workload"] == w and r["contrast"] == contrast) / 100 + 1
+                  for w in workloads]
+        bars = ax.bar(np.arange(3) + offset, values, width=0.34, color=color,
+                      edgecolor="black", linewidth=0.6, label=label)
+        for bar, value in zip(bars, values, strict=True):
+            ax.text(bar.get_x() + bar.get_width()/2, value + 0.3, f"{value:.1f}×",
+                    ha="center", va="bottom", fontsize=6.5, fontweight="bold")
+    ax.set_xticks(range(3), ["Arithmetic", "Read", "Write 4 KiB"])
+    ax.set_title("(a) Synthetic backends, n=100", fontweight="bold")
+    ax.legend(loc="upper center", fontsize=6.2, frameon=False, handlelength=1.6)
+    ax = axes[1]
+    ratios = [r["ratio"] for r in data["verified"]]
+    bars = ax.bar(range(5), ratios, width=0.58, color="#303030", edgecolor="black", linewidth=0.6)
+    for bar, value in zip(bars, ratios, strict=True):
+        ax.text(bar.get_x() + bar.get_width()/2, value + 0.35, f"{value:.2f}×",
+                ha="center", va="bottom", fontsize=6.8, fontweight="bold")
+    ax.set_xticks(range(5), ["Constant", "Read\n32 B", "Read\n4 KiB", "Read\n64 KiB", "Two reads\n32 B"])
+    ax.set_title("(b) Linux / verified mode, n=50", fontweight="bold")
+    for ax in axes:
+        ax.set_ylim(0, 21)
+        ax.set_yticks([0, 5, 10, 15, 20])
+        ax.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}×"))
+        ax.axhline(1, color="#505050", linewidth=0.65, linestyle="--")
+        ax.set_ylabel("Runtime relative to stated baseline")
+        ax.grid(axis="y", color="#d0d0d0", linewidth=0.45)
+        ax.set_axisbelow(True)
+        ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout(w_pad=2.2)
+    _save(fig, "backend-runtime.pdf")
+
+
+def operation_overhead(data: dict) -> None:
+    """Show successful whole-call overhead and scaled paired-difference SD."""
+    rows = data["operations"]
+    values = [100 * (r["ratio"] - 1) for r in rows]
+    errors = [100 * r["increment_sd"] / r["baseline_mean"] for r in rows]
+    fig, ax = plt.subplots(figsize=(7.0, 3.7))
+    bars = ax.barh(range(len(rows)), values, xerr=errors, height=0.65,
+                   color="#b0b0b0", edgecolor="black", linewidth=0.5,
+                   capsize=2, error_kw={"elinewidth": 0.7, "capthick": 0.7})
+    ax.set_yticks(range(len(rows)), [r["operation"] for r in rows])
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1850)
+    ax.set_xticks([0, 500, 1000, 1500])
+    ax.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}%"))
+    ax.set_xlabel("Added whole-call time relative to plain Python subprocess")
+    ax.set_title("Successful operation/API variants, 50 matched pairs each", fontweight="bold")
+    ax.grid(axis="x", color="#d0d0d0", linewidth=0.45)
+    ax.set_axisbelow(True)
+    ax.spines[["top", "right"]].set_visible(False)
+    for bar, value, error in zip(bars, values, errors, strict=True):
+        ax.text(value + error + 16, bar.get_y() + bar.get_height()/2,
+                f"{value:.0f}%", ha="left", va="center", fontsize=6.8)
+    fig.tight_layout()
+    _save(fig, "operation-overhead.pdf")
+
+
+
+def _alternative_metrics() -> dict:
+    data = json.loads((ROOT / "evidence/alternative_backends_summary.json").read_text())
+    digest = hashlib.sha256((ROOT / data["source"]).read_bytes()).hexdigest()
+    if digest != data["source_sha256"]:
+        raise ValueError("Alternative-backend summary does not match its source report")
+    return data
+
+
+def _paired_panels(rows: list[dict], workloads: list[str], labels: list[str],
+                   titles: tuple[str, str], name: str, *, height: float = 2.7,
+                   ratio_digits: int = 2) -> None:
+    """Keep ratios and paired-difference confidence intervals on separate axes."""
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, height), gridspec_kw={"width_ratios": [1, 1.12]})
+    for mode, label, color, marker, offset in [
+        ("landlock", "Landlock", "#202020", "o", -0.13),
+        ("container", "Container", "#707070", "s", 0.13),
+    ]:
+        selected = [next(r for r in rows if r["workload"] == w and r["mode"] == mode) for w in workloads]
+        y = np.arange(len(workloads)) + offset
+        ratios = [r["ratio_of_reported_means"] for r in selected]
+        axes[0].plot(ratios, y, linestyle="", marker=marker, color=color, markersize=4, label=label)
+        for x, yy in zip(ratios, y, strict=True):
+            axes[0].annotate(f"{x:.{ratio_digits}f}×", (x, yy), xytext=(5, 0), textcoords="offset points",
+                             va="center", fontsize=7)
+        increments = np.array([r["added_ms"] for r in selected])
+        bounds = np.array([r["session_ci_ms"] for r in selected])
+        axes[1].errorbar(increments, y, xerr=np.array([increments - bounds[:, 0], bounds[:, 1] - increments]),
+                         fmt=marker, color=color, markersize=4, capsize=2, elinewidth=0.8, label=label)
+    axes[0].axvline(1, color="#888888", linestyle="--", linewidth=0.7)
+    axes[1].axvline(0, color="#888888", linestyle="--", linewidth=0.7)
+    axes[0].set_xlabel("Runtime / baseline (ratio of means)")
+    axes[1].set_xlabel("Added time (ms), session 95% CI")
+    axes[0].xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda v, _: f"{v:g}×"))
+    max_ratio = max(r["ratio_of_reported_means"] for r in rows)
+    axes[0].set_xlim(0.85 if max_ratio < 3 else 0, max_ratio * 1.22)
+    for i, ax in enumerate(axes):
+        ax.set_yticks(range(len(labels)), labels if i == 0 else [""] * len(labels))
+        ax.set_ylim(len(labels) - 0.5, -0.5)
+        ax.set_title(titles[i], fontweight="bold")
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5)
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, legend_labels, loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.55, -0.02))
+    fig.tight_layout(w_pad=2.0, rect=(0, 0.11, 1, 1))
+    _save(fig, name)
+
+
+def current_backend_runtime(data: dict) -> None:
+    _paired_panels(data["comparison"],
+                   ["constant_control", "read_32b", "read_4kib", "read_64kib", "two_reads_32b"],
+                   ["Constant", "Read 32 B", "Read 4 KiB", "Read 64 KiB", "Two reads 32 B"],
+                   ("(a) Relative to verified mode", "(b) Added to verified mode"),
+                   "backend-runtime.pdf", height=2.8)
+
+
+def execution_cost(data: dict) -> None:
+    _paired_panels(data["application"] + data["native_chain"],
+                   ["pandas_february", "env_to_cat"],
+                   ["Pandas replay", "Native chain"],
+                   ("(a) Relative to plain process", "(b) Added to plain process"),
+                   "execution-cost.pdf", height=2.15, ratio_digits=4)
+
+
+def current_operation_overhead(data: dict) -> None:
+    rows = data["operations"]
+    operations = list(dict.fromkeys(r["workload"] for r in rows))
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 4.3), sharey=True)
+    for ax, mode, title in zip(axes, ["landlock", "container"], ["Landlock", "Container"], strict=True):
+        selected = [next(r for r in rows if r["workload"] == w and r["mode"] == mode) for w in operations]
+        means = np.array([r["added_ms"] for r in selected])
+        ci = np.array([r["session_ci_ms"] for r in selected])
+        ax.errorbar(means, range(len(operations)), xerr=[means-ci[:, 0], ci[:, 1]-means],
+                    fmt="o", color="#202020", markersize=3.5, capsize=2, elinewidth=0.8)
+        ax.axvline(0, color="#999999", linestyle="--", linewidth=0.6)
+        ax.set_title(title, fontweight="bold")
+        ax.set_xlabel("Added whole-call time (ms), 95% CI")
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5)
+        ax.spines[["top", "right"]].set_visible(False)
+    axes[0].set_yticks(range(len(operations)), [w.replace("_", " ") for w in operations])
+    axes[0].invert_yaxis()
+    axes[0].set_xlim(-3, 6)
+    axes[1].set_xlim(44, 57)
+    fig.tight_layout(w_pad=2)
+    _save(fig, "operation-overhead.pdf")
+
 def main() -> None:
     """Generate every paper figure from the recorded evaluation values."""
     _configure()
     motivation()
     architecture()
     overhead()
+    data = _application_metrics()
+    backend = _backend_metrics()
+    application_runtime(data)
+    audit_breakdown(data, backend)
+    current = _alternative_metrics()
+    current_backend_runtime(current)
+    execution_cost(current)
+    current_operation_overhead(current)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,174 @@
+\section{Application Study Details}
+\label{app:application-details}
+
+The application study uses WIP \code{40e24e9} plus recorded working-tree changes.
+Each integrated run checks a frozen source inventory; reproduction requires the
+associated source archive and per-file hashes. The Pandas and SQL upstream pin
+is \code{4ffeb7f38178}; Open Notebook is \code{a0f6f3081ae0}. Environment freezes,
+model digests, policy and manifest hashes, commands, and attempt IDs distinguish
+the cohorts. Table~\ref{tab:study-host} gives the measured host configuration.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+Component & Configuration \\
+\midrule
+CPU / memory & Intel Xeon w5-3435X; 1 socket, 16 cores, 32 logical CPUs; 62.25~GiB OS-visible RAM \\
+GPUs & Two NVIDIA RTX A4000, 16,376~MiB each; driver 580.178.04; sharding not measured \\
+OS / Python & Ubuntu 24.04.5 LTS; Linux 6.17.0-1033-oem, x86-64; Python 3.13.11 for Pandas/SQL, 3.12.3 for Notebook \\
+Model serving & Ollama 0.32.14, local HTTP endpoint; application and children pinned to CPU~0, server separate \\
+Pandas / SQL model & Qwen3-8B Q4\_K\_M; temperature 0; requested seed 20261005; reasoning disabled; no client retries \\
+Repeated-run residency & 9,969,650,892 bytes reported VRAM; 32,768-token context observed only in the repetition cohort \\
+Notebook model & Local \code{llama3:latest}; temperature 1.0, top-$p$ 0.9, maximum 8,192 output tokens \\
+Confinement & bubblewrap 0.9.0, namespaces, libseccomp; activation receipts retained \\
+Audit / evidence storage & \code{/data}, ext4 on \code{/dev/sda2}; rotating ST12000NM000J disk \\
+Timing conditions & Initial load averages 0.23/0.21/0.41; nonexclusive host, unfixed CPU frequency, caches not flushed \\
+\bottomrule
+\end{tabularx}
+\caption{Measured application-study environment. Full model and source identities
+are retained with the study records. This host does not describe historical
+component benchmarks.}
+\label{tab:study-host}
+\end{table*}
+
+\paragraph{Application shortlist.}
+The fixed shortlist has eight applications from seven repositories. Pandas is
+the only protected integration. SQL and Open Notebook have baseline runs; email,
+research, coding, newspaper, and finance candidates have no completed protected
+port. The archived intake ledger retains immutable pins and dependency,
+provider, account, and remote-instrumentation blockers.
+
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lXX X}
+\toprule
+Operation / profile & A: upstream & B: added authorization & C: authorization + host enforcement \\
+\midrule
+Read unrelated file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Read supplementary file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Same supplementary read / broad & Read succeeds & Read succeeds & Read succeeds \\
+Write outside host fixture & Host file created & Host file created & Host unchanged; private \code{/tmp} write succeeds \\
+Overwrite dataset / narrow & Dataset modified & Dataset modified & \code{EROFS}; dataset hash unchanged \\
+\bottomrule
+\end{tabularx}
+\caption{Effects inside an authorized Pandas computation. Each cell is one
+execution; all 15 executions return the correct February result. The dataset
+overwrite is a separately recorded diagnostic amendment. A private temporary
+write is host containment, not denial of all writes outside the output directory.}
+\label{tab:application-effects}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & P95 \\
+\midrule
+A & 267.19 & 6.84 & 265.00 & 280.56 \\
+B & 545.54 & 31.53 & 544.34 & 583.76 \\
+C & 930.93 & 42.95 & 916.64 & 1,010.42 \\
+\bottomrule
+\end{tabular}
+\caption{Local computation replay in milliseconds, 100 measured calls per
+configuration. SD describes variation within this trace, not across tasks.}
+\label{tab:replay-latency}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & Success \\
+\midrule
+A & 12.777 & 1.410 & 12.236 & 5/5 \\
+B & 12.725 & 0.195 & 12.736 & 5/5 \\
+C & 15.354 & 0.118 & 15.298 & 5/5 \\
+\bottomrule
+\end{tabular}
+\caption{Recorded full-workflow time in seconds for five clean February runs
+per configuration. Scope includes runner setup, environment capture, the
+model-driven subprocess under \code{strace}, and the outcome oracle.}
+\label{tab:workflow-latency}
+\end{table}
+
+\paragraph{Port scope.}
+The Pandas computation normally runs inside graph nodes through
+\code{run\_code\_sandboxed\_subprocess}. C executes the unmodified sandbox program
+inside its already-fresh worker. It retains upstream checks rather than claiming
+unchanged dispatch plumbing. SQL invokes \code{SQLDatabaseAgent.ainvoke\_agent}
+on a recreated fixture and checks both query results and database state.
+Notebook persists two synthetic source collections and checks an answer for the
+authorized fixture fact through its native \code{source\_chat\_graph}. It uses
+the native Ollama provider, ingestion worker, and dedicated SurrealDB, whose
+image digest is recorded in the manifest. Frontend behavior, embeddings, and
+vector search are excluded.
+
+Pandas keeps its original wrangling and visualization agents, with a local
+provider and the same IPython dependency fix in A/B/C. Authentication, upload
+widgets, history, and rendering are outside the measured backend. The initial
+regional-aggregation task returns unaggregated rows; the chart task encounters
+an upstream regular-expression error. These failures remain in all three
+configurations. Later clean and attacked runs pair fresh attempts of the
+known-working February task; they are not additional distinct utility tasks.
+
+\paragraph{Security denominators and observation.}
+The original Pandas cohort has nine clean executions and 15 controlled-effect
+executions, including the separately recorded dataset-overwrite amendment.
+The later cohort has 15 clean and 15 attacked executions with fresh attempt IDs.
+Its first launch batch has 30 pre-inference infrastructure failures, retained
+separately. We do not count those failures as prevention or pool clean workloads.
+The frozen CSV-cell attack is not retuned after its zero-attempt outcome.
+Observer files lie outside worker write permissions, but the parent and arbitrary
+baseline code share a host UID. The observer is not tamperproof against a
+malicious parent. Model-judged quality is not used as the security oracle.
+
+\paragraph{Additional timing statistics.}
+Local-replay variances for A/B/C are 46.80, 993.96, and 1,844.46~ms$^2$.
+Full-workflow variances are 1.989, 0.038, and 0.014~s$^2$, with ranges
+11.986--15.293, 12.437--12.979, and 15.243--15.543~s.
+Replay paired increments are 278.35~ms for B--A (SD 32.91~ms),
+663.74~ms for C--A (SD 42.55~ms), and 385.39~ms for C--B (SD 54.98~ms).
+Full-workflow paired increments are 2.577~s for C--A (SD 1.446~s),
+2.629~s for C--B (SD 0.216~s), and $-0.052$~s for B--A (SD 1.581~s).
+These paired SDs come from the study; they cannot be reconstructed from
+marginal summaries alone. The main figures normalize means and SDs by the
+fixed A mean within each cohort, rather than estimating a distribution of ratios.
+
+The 100-call replay records mean original-subprocess spans of 267.11~ms in A
+and 267.03~ms in B, leaving 278.51~ms outside that subprocess in B.
+C's executor averages 614.54~ms, including grant compilation (20.56~ms),
+worker execution and supervision (325.58~ms), and a reported residual
+(268.41~ms, rounded). Another 316.39~ms lies outside the executor.
+Components are nested within the executor total, not additive to it.
+
+In the separate 20-call diagnostic, SQLite audit writes average 273.94~ms
+in B (SD 32.12~ms) and 274.52~ms in C (SD 8.96~ms).
+B's total is 544.34~ms and its original subprocess takes 265.09~ms.
+Of the remaining 279.25~ms, audit writes account for 98.1\%; the 5.31~ms
+residual accounts for 1.9\%. This cohort is not pooled with the replay.
+
+First-use call latencies are 283.26/525.81/949.87~ms for A/B/C. Adapter
+initialization costs are 0.05/231.62/344.96~ms after 1,121.86~ms of shared imports.
+Each is a single observation with uncontrolled page-cache state, not a disk-cold
+estimate. Every measured C call still launches a fresh worker.
+
+\paragraph{Reproduction records.}
+The study names \path{eval/apps.csv} and \path{eval/APPLICATIONS.md} as its intake
+and setup records. The scripts \path{eval/scripts/pandas_runtime.py},
+\path{pandas_dispatch.py}, and \path{pandas_e2e_repetitions.py} run the replay,
+dispatch checks, and model-driven repetitions. Replay parameters are
+\code{--warmup 10 --samples 100}; the audit diagnostic uses two warm-ups and
+20 samples. Commands use the pinned upstream environment and fresh output paths.
+The reports \path{macro-metrics.json} and \path{application-pilot.md} identify
+derived statistics, controlled effects, and the oracle correction. The result
+directories distinguish the runtime, audit-profile, dispatch, failed-launch,
+and retry cohorts. These records and the exact implementation overlay must
+accompany the anonymous artifact; a source commit by itself cannot reproduce
+the application study.
+
