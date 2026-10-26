@@ -197,7 +197,8 @@ different scopes stated in the caption:
   and evaluator sandboxes isolate policy evaluation, not agent tool bodies;
   these are also OS-level mechanisms, not a restricted agent language.
 
-The main paper now has four figures and two tables. Three new evaluation figures
+Before the expanded backend report, the main paper had four figures and two tables.
+Three evaluation figures
 replace the main result tables: controlled-effect counts and retained computation,
 two separately normalized runtime panels, and the separately measured B audit-cost
 diagnostic. Detailed tables move to the application appendix. All plots read
@@ -213,3 +214,56 @@ remain in the appendix. The audit residual is computed as
 98.1%/1.9% of time outside B's subprocess. No nested span or separate cohort
 is added to the replay totals. The historical deployment observation now also
 states its relative cost, 1.47x (47.1%), alongside absolute means.
+
+## Expanded evaluation report incorporated
+
+The second supplied report is preserved byte-for-byte as
+`evidence/paper_evaluation_source.md`, SHA-256
+`4b993da71c49fdc1e9ac3cbc8062a0ddab066f56731731756d2d21593cdd9930`.
+It extends, rather than replaces, the original application's numerical record.
+`python3 scripts/import_backend_metrics.py` extracts its tables into
+`evidence/backend_evaluation_summary.json`; the generator verifies the source
+hash. Raw samples, linked images, sources.tar.gz, detailed admission diagnostics,
+and inner-body timings were referenced but not supplied or found in public WIP.
+No experimental rerun or raw-distribution reconstruction is claimed.
+
+The main paper now has five figures and two tables. The security figure separates
+Pandas's three distinct probes from E6's 49 operation/surface cases. The latter
+reproduces all 49 effects in three repeats in the synthetic trusted/helper modes;
+no forbidden effect appears in either host condition. Each host condition has
+135 explicit denials, six generic SQLite errors, and six empty/absent results
+across 147 trials, plus 30/30 positive-control trials. Only 45/49 cases establish
+explicit denial. The synthetic direct-language frontend's 27/30 control
+rejections are not attributed to production verified mode.
+
+Three new runtime scopes remain separate:
+
+- E6 runtime-v1: three successful workloads, four conditions, ten warmups and
+  100 measured calls each; no model or durable audit, fresh workers, setup excluded.
+  Host/trusted is 15.30-15.63x; paired differences and their SDs are retained.
+- E6 operations-v1: 16 successful operation/API variants, five warmups and 50
+  matched pairs each. Plain Python subprocess is the baseline. Whole-call cost
+  is 12.53-15.88x, not per-syscall overhead. Whiskers use the paired-increment SD
+  divided by the same fixed baseline mean; they are not ratio confidence intervals.
+- E6 verified-v2: production cedar_security admission, binding validation and
+  grant-checked read_text versus Linux execution. Both use real Cedar but have
+  different policy frontends. Five warmups and 50 pairs per workload; reused
+  executors, fresh host workers, separately timed setup. Ratios 11.60-17.31x
+  apply only to the constant/read workloads; read sizes are not distinct APIs.
+
+The exclusive backend partition identifies Cedar filtering as 65.8-66.2% of
+host dispatch and worker execution/supervision as 24.4-24.9%. Public WIP source
+`libs/prebuilt/langgraph/prebuilt/security/cedar.py` at `40e24e9` confirms temporary
+policy/request files, CLI validation and per-rule authorization subprocesses.
+This supports the mechanism description, not the reported timings. Other-invoke
+remains a residual; stage variances are not summed. The application audit result
+has a different denominator and cohort and is not added to this partition.
+
+E1's 8 -> 4 -> 0 sink projection is included as projected 50%/100% reductions,
+with its broader host model explicitly distinguished from the measured adapter.
+The zero-attempt model-driven injection batch still has undefined enforcement
+success and relative reduction. One protected application and two baselines
+remain the port count. Artifact requirements now include backend source identity,
+raw samples, setup/admission costs, capability degradation, races, and multi-host
+and multi-task repetitions. The timing comparisons cannot be transferred between
+Landlock, bubblewrap, object brokers, or an unmeasured release revision.

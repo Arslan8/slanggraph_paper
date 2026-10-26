@@ -32,10 +32,12 @@ analysis interface supplies findings and provenance to fixed policies, allowing
 new analyses to reuse the enforcement infrastructure. \sys implements this
 separation with runtime-wide mandatory restrictions, typed pump and SQLite
 mediators, host-dependent lowering, and checks on instrumented data flows.
-In an existing data-analysis application, authorization alone permits three
-tested forbidden filesystem effects; host enforcement prevents all three while
-preserving the intended computation. Replaying that computation takes
-$3.48\times$ upstream runtime, with synchronous audit persistence a major cost.
+In a Pandas application, host enforcement eliminates all three tested forbidden
+filesystem effects while preserving computation; authorization alone eliminates
+none. A separate backend census observes no forbidden effect in 49 cases and
+retains all 30 positive-control trials per host condition. Application replay
+takes $3.48\times$ upstream runtime. Separate profiles identify audit persistence
+and Cedar CLI evaluation as major costs.
 \sys provides a common enforcement foundation on which independently developed
 agent-security analyses and policies can build.
 \end{abstract}
@@ -161,8 +163,8 @@ Our contributions are:
   sealed runtime MAC, and provenance-aware policy hooks in LangGraph.
   \item \textbf{An implementation and evaluation.} We instantiate the framework
   with pump and SQLite mediators and fixed-policy analysis modules, and evaluate
-  application effect containment, utility, integration requirements, and runtime
-  cost, alongside component-level reference-monitor checks.
+  application effect containment, a 49-case operation census, verified and host
+  execution costs, and component-level reference-monitor checks.
 \end{itemize}
 
 \section{Motivation}
@@ -813,10 +815,11 @@ constrains access to live objects; it does not provide snapshot integrity.
 \paragraph{Evaluation is not yet complete.}
 The application study has one protected integration and an initial three-task
 workload with unresolved utility failures. Its model-driven payload produces
-no forbidden attempts. Broader workloads, comparative resource-broker and
-flow-policy experiments, runtime-MAC composition, and host-capability degradation
-remain necessary. The measured bubblewrap cost does not characterize Landlock
-or every application.
+no forbidden attempts. The 49-case census and five verified-mode workloads do
+not establish arbitrary-Python coverage. More protected ports, multi-task and
+multi-host workloads, broader verified operations, resource-broker and flow-policy
+comparisons, runtime-MAC composition, races, and capability degradation remain
+necessary. Different executor implementations require separate measurements.
 
 \section{Related Work}
 
@@ -920,6 +923,8 @@ for policy correctness, TCB maintenance, user notice, and recovery from
 
 \input{sections/evaluation_appendix}
 
+\input{sections/backend_evaluation}
+
 \input{sections/component_evidence}
 
 \section{Artifact Claim Map}
@@ -953,9 +958,13 @@ for policy correctness, TCB maintenance, user notice, and recovery from
   \path{eval/APPLICATIONS.md}, the Pandas scripts under \path{eval/scripts/},
   and the separately identified cohorts under \path{eval/results/}.
   The source archive and working-tree hashes are required in addition to the WIP pin.
+  \item Backend census and timings: \path{eval/reports/e6/isolation-v1/},
+  \path{runtime-v1/}, \path{operations-v1/}, and \path{verified-v2/};
+  report builder: \path{eval/scripts/paper_evaluation.py}.
   \item Historical policy overhead: \path{libs/prebuilt/benchmarks/}.
-  \item Reproducibility identities: \path{eval/HARDWARE.md} and
-  \path{eval/PINS.md}.
+  \item Reproducibility identities: run-level host captures and source archives,
+  plus \path{eval/PINS.md}. The older \path{eval/HARDWARE.md} does not override
+  the measured cohort's host capture.
 \end{itemize}
 
 \end{document}

@@ -1,8 +1,10 @@
 PYTHON ?= python3
 FIGURES = figures/motivation.pdf figures/architecture.pdf figures/overhead.pdf \
-	figures/application-effects.pdf figures/application-runtime.pdf figures/audit-breakdown.pdf
+	figures/application-effects.pdf figures/application-runtime.pdf figures/audit-breakdown.pdf \
+	figures/backend-runtime.pdf figures/operation-overhead.pdf
 TEX_SOURCES = main.tex $(wildcard sections/*.tex)
-EVALUATION_DATA = evidence/application_macrobenchmarks_summary.json evidence/application_macrobenchmarks_source.md
+EVALUATION_DATA = evidence/application_macrobenchmarks_summary.json evidence/application_macrobenchmarks_source.md \
+	evidence/backend_evaluation_summary.json evidence/paper_evaluation_source.md
 
 .PHONY: all clean check figures
 .DELETE_ON_ERROR:

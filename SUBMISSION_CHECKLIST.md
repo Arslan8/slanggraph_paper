@@ -35,9 +35,37 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   zero forbidden attempts in every configuration, not enforcement success.
 - Initial utility: 1/3 tasks in every configuration. Later selected-task repeats:
   5/5 per configuration. Do not pool these cohorts.
-- Replay: 100 measured calls each, means 267.19/545.54/930.93 ms; separate
-  20-call audit diagnostic identifies synchronous persistence cost. Five-run
-  workflow means are 12.777/12.725/15.354 s, including runner and tracing costs.
+- Replay: 100 measured calls each; B/A 2.04x (+104.2%), C/A 3.48x (+248.4%).
+  The separate 20-call audit diagnostic identifies synchronous persistence cost.
+  Five-run full-workflow C/A is 1.202x (+20.2%), including model and runner costs.
+
+## Expanded backend evidence incorporated
+
+- `evidence/paper_evaluation_source.md` preserves the new report. Its aggregate
+  tables are imported into `evidence/backend_evaluation_summary.json`; source
+  hashes are checked when generating figures. The archived report and JSON are
+  not substitutes for raw samples, source archives, or admission diagnostics.
+- E6 fixed census: 49/49 effects in both synthetic baselines across three repeats;
+  0/49 in both host conditions, each retaining 30/30 positive-control trials.
+  Of 147 forbidden trials per host condition, 135 show explicit denial, six a
+  generic SQLite error, and six an empty/absent result. Only 45/49 cases support
+  explicit blocking. Zero observed effect is not automatically an explicit denial.
+- The synthetic direct-language frontend rejects 27/30 controls. It is distinct
+  from the actual production verified mode; do not equate them or pool their data.
+- Matched backend timings: three successful workloads, four conditions, ten
+  warmups and 100 measured calls each. Host/trusted is 15.30-15.63x. No model or
+  durable audit sink; fresh workers; construction/preflight excluded and separate.
+- Exclusive backend stages: Cedar filtering 65.8-66.2%, worker 24.4-24.9% of total
+  host dispatch. Temporary policy files, validation, and per-rule Cedar CLI
+  subprocesses are confirmed in WIP code. Timings remain supplied measurements.
+- Sixteen successful operation/API variants, five warmups and 50 matched pairs
+  each: host/plain-Python whole-call ratios 12.53-15.88x. No per-syscall tax claim.
+- Production verified-v2: five constant/read workloads, five warmups and 50
+  paired samples; host/verified 11.60-17.31x. Both use real Cedar with different
+  frontends; reused executors, fresh host workers. Broad API and application
+  coverage cannot be inferred from these five workloads.
+- E1 projections of 8 -> 4 -> 0 exposed sinks are static 50%/100% reductions;
+  the host model is broader than the measured filesystem adapter.
 
 ## Historical evidence retained
 
@@ -71,7 +99,8 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   manifests, policies, environment freezes, model digests, scripts, and raw
   samples to the reproducible artifact. The named application records are not
   in the reviewed public WIP tree; the source commit alone is insufficient.
-- Recompute application statistics from raw traces, preserve the failed launch
+- Archive and independently check the report builder's recomputation from raw
+  application and backend traces. Preserve the failed launch
   cohort and corrected outside-fixture-write oracle, and link each table cell
   to its run IDs. Keep replay, audit diagnostic, workflow, and startup scopes
   separate. Do not reconstruct paired SDs or box plots from marginal summaries.
@@ -80,9 +109,15 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   probe additional adversarial channels and host-capability degradation, and
   mediate SQL query/metadata and Notebook server/storage paths before counting
   them as protected ports. Add across-task uncertainty once tasks are available.
-- Profile or optimize synchronous audit persistence while preserving its
-  security/durability contract, then rerun the matched replay. No SSD speedup or
-  negligible enforcement overhead follows from the current evidence.
+- Profile or optimize synchronous audit persistence and the repeated Cedar CLI
+  policy path while preserving their contracts, then rerun the same successful
+  workloads. No SSD, caching, embedded-engine, or uninstrumented speedup follows
+  from the current measurements. Keep the two measured bottlenecks separate.
+- Release the exact E6 source archives and map each host condition to its concrete
+  executor, policy frontend, revision, and activation evidence. Include all stage
+  samples, setup/static-admission costs, verifier rejection diagnostics, and
+  operation-body timings; the supplied report references but does not include
+  those raw records. Add multi-host and multi-task measurements and race tests.
 
 - Create a claim ledger mapping each manuscript claim to a source revision,
   symbol or result file, backend, command, evidence type, and remaining
@@ -111,9 +146,10 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   tested. A recorded digest alone is insufficient.
 - Re-run `make security-verify` and the full `libs/prebuilt` format, lint, and
   test gates on the release revision; update the checked-in layered report.
-- Run and report Landlock fresh-worker end-to-end latency and throughput on the
-  accepted evaluation host. Do not extrapolate it from policy-only benchmarks or
-  the separately implemented bubblewrap deployment path.
+- Validate the new frozen backend latency cohorts against their exact executor
+  sources and repeat them on the release revision. Throughput remains unmeasured.
+  Do not transfer a Linux-labeled result to Landlock, bubblewrap deployment, or
+  object-broker paths without establishing the actual implementation identity.
 - Add dynamic slangGraph rows to E2. The current paper deliberately reports the
   existing third-party canaries, router evidence, and Linux tests separately.
 - Complete AgentDojo, InjecAgent, and ASB parity runs or remove the prospective
@@ -138,8 +174,8 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
   tightening from an eligible obligation waiver; static-analysis waivers are
   not runtime permission to disable confinement.
 - Replace the historical policy plot's hard-coded medians with versioned raw
-  measurement inputs. Application figures now read source-hash-bound reported
-  aggregates, but their raw traces still require artifact validation. Carry
+  measurement inputs. Application and backend figures read source-hash-bound
+  reported aggregates, but raw traces still require artifact validation. Carry
   backend, source revision, host, sample count, and dispersion, and keep
   publication/checkout, preparation, launch, and tool execution costs separate.
 - Check page limits and anonymity independently of `make check`, which verifies

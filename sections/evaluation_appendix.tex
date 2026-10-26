@@ -56,6 +56,62 @@ installation and subagents are not additional ports.}
 \label{tab:application-status}
 \end{table*}
 
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lXX X}
+\toprule
+Operation / profile & A: upstream & B: added authorization & C: authorization + host enforcement \\
+\midrule
+Read unrelated file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Read supplementary file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Same supplementary read / broad & Read succeeds & Read succeeds & Read succeeds \\
+Write outside host fixture & Host file created & Host file created & Host unchanged; private \code{/tmp} write succeeds \\
+Overwrite dataset / narrow & Dataset modified & Dataset modified & \code{EROFS}; dataset hash unchanged \\
+\bottomrule
+\end{tabularx}
+\caption{Effects inside an authorized Pandas computation. Each cell is one
+execution; all 15 executions return the correct February result. The dataset
+overwrite is a separately recorded diagnostic amendment. A private temporary
+write is host containment, not denial of all writes outside the output directory.}
+\label{tab:application-effects}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & P95 \\
+\midrule
+A & 267.19 & 6.84 & 265.00 & 280.56 \\
+B & 545.54 & 31.53 & 544.34 & 583.76 \\
+C & 930.93 & 42.95 & 916.64 & 1,010.42 \\
+\bottomrule
+\end{tabular}
+\caption{Local computation replay in milliseconds, 100 measured calls per
+configuration. SD describes variation within this trace, not across tasks.}
+\label{tab:replay-latency}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & Success \\
+\midrule
+A & 12.777 & 1.410 & 12.236 & 5/5 \\
+B & 12.725 & 0.195 & 12.736 & 5/5 \\
+C & 15.354 & 0.118 & 15.298 & 5/5 \\
+\bottomrule
+\end{tabular}
+\caption{Recorded full-workflow time in seconds for five clean February runs
+per configuration. Scope includes runner setup, environment capture, the
+model-driven subprocess under \code{strace}, and the outcome oracle.}
+\label{tab:workflow-latency}
+\end{table}
+
 \paragraph{Port scope.}
 The Pandas computation normally runs inside graph nodes through
 \code{run\_code\_sandboxed\_subprocess}. C executes the unmodified sandbox program
@@ -67,6 +123,14 @@ authorized fixture fact through its native \code{source\_chat\_graph}. It uses
 the native Ollama provider, ingestion worker, and dedicated SurrealDB, whose
 image digest is recorded in the manifest. Frontend behavior, embeddings, and
 vector search are excluded.
+
+Pandas keeps its original wrangling and visualization agents, with a local
+provider and the same IPython dependency fix in A/B/C. Authentication, upload
+widgets, history, and rendering are outside the measured backend. The initial
+regional-aggregation task returns unaggregated rows; the chart task encounters
+an upstream regular-expression error. These failures remain in all three
+configurations. Later clean and attacked runs pair fresh attempts of the
+known-working February task; they are not additional distinct utility tasks.
 
 \paragraph{Security denominators and observation.}
 The original Pandas cohort has nine clean executions and 15 controlled-effect
@@ -123,65 +187,3 @@ and retry cohorts. These records and the exact implementation overlay must
 accompany the anonymous artifact; a source commit by itself cannot reproduce
 the application study.
 
-\subsection{Detailed application results}
-
-The main figures summarize these exact reported outcomes and timing statistics.
-The tables retain absolute timings, medians, and replay tails behind the
-normalized mean/SD plots. Counts use the denominators defined in
-Section~\ref{sec:evaluation}.
-
-\begin{table*}[t]
-\centering
-\small
-\begin{tabularx}{\textwidth}{lXX X}
-\toprule
-Operation / profile & A: upstream & B: added authorization & C: authorization + host enforcement \\
-\midrule
-Read unrelated file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
-Read supplementary file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
-Same supplementary read / broad & Read succeeds & Read succeeds & Read succeeds \\
-Write outside host fixture & Host file created & Host file created & Host unchanged; private \code{/tmp} write succeeds \\
-Overwrite dataset / narrow & Dataset modified & Dataset modified & \code{EROFS}; dataset hash unchanged \\
-\bottomrule
-\end{tabularx}
-\caption{Effects inside an authorized Pandas computation. Each cell is one
-execution; all 15 executions return the correct February result. The dataset
-overwrite is a separately recorded diagnostic amendment. A private temporary
-write is host containment, not denial of all writes outside the output directory.}
-\label{tab:application-effects}
-\end{table*}
-
-\begin{table}[t]
-\centering
-\small
-\begin{tabular}{lrrrr}
-\toprule
-Config. & Mean & SD & Median & P95 \\
-\midrule
-A & 267.19 & 6.84 & 265.00 & 280.56 \\
-B & 545.54 & 31.53 & 544.34 & 583.76 \\
-C & 930.93 & 42.95 & 916.64 & 1,010.42 \\
-\bottomrule
-\end{tabular}
-\caption{Local computation replay in milliseconds, 100 measured calls per
-configuration. SD describes variation within this trace, not across tasks.}
-\label{tab:replay-latency}
-\end{table}
-
-\begin{table}[t]
-\centering
-\small
-\begin{tabular}{lrrrr}
-\toprule
-Config. & Mean & SD & Median & Success \\
-\midrule
-A & 12.777 & 1.410 & 12.236 & 5/5 \\
-B & 12.725 & 0.195 & 12.736 & 5/5 \\
-C & 15.354 & 0.118 & 15.298 & 5/5 \\
-\bottomrule
-\end{tabular}
-\caption{Recorded full-workflow time in seconds for five clean February runs
-per configuration. Scope includes runner setup, environment capture, the
-model-driven subprocess under \code{strace}, and the outcome oracle.}
-\label{tab:workflow-latency}
-\end{table}

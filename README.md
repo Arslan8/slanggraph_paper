@@ -28,38 +28,51 @@ for its restricted orchestration interpreter; slangGraph receives credit for
 admitted tool bodies using monitored APIs. The caption states those scopes.
 Host lowering and dual execution paths remain separate capabilities.
 
-The evaluation now centers on the supplied application study: one protected
-Pandas computation integration, with SQL and Open Notebook baseline reproductions.
-It compares the original subprocess sandbox, added authorization, and authorization
-plus the bubblewrap executor. It separates controlled effects, deterministic
-dispatch checks, model-driven injections, utility, 100-call computation replays,
-a 20-call audit diagnostic, and five-run workflow observations.
+The evaluation combines one protected Pandas computation integration, two
+additional baseline adaptations, a 49-case backend operation census, and three
+separate backend timing studies. The production verified-language comparison is
+distinct from the synthetic helper condition. All timing comparisons lead with
+percentages or runtime multiples, with absolute statistics in the appendices.
 
-The application source is WIP plus an archived working-tree overlay, not the WIP
-commit alone. `evidence/application_macrobenchmarks_source.md` preserves the
-supplied report byte-for-byte. Its raw samples, scripts, and source archive are
-referenced by that report but are not included in this paper repository or present
-at the reviewed WIP commit. No application experiment was rerun during this edit.
+Evidence is archived without changing the supplied files:
 
-`sections/evaluation.tex` contains the main study, while
-`sections/evaluation_appendix.tex` holds environment and reproduction details.
-Historical canaries, router/API checks, Linux tests, and policy-only measurements
-remain in `sections/component_evidence.tex` with their original snapshots.
-The policy-overhead figure is historical, not the source of the application
-timings. See `SUBMISSION_CHECKLIST.md` for remaining evidence requirements.
+- `evidence/application_macrobenchmarks_source.md` retains the original
+  application study, including its oracle correction and separate cohorts.
+- `evidence/paper_evaluation_source.md` adds the expanded report: 49-case census,
+  100-call matched backend timings, an exclusive stage partition, 16 operation/API
+  variants, and five production verified-versus-Linux workloads.
+- The corresponding summary JSON files contain reported aggregates, not raw
+  samples. Figure generation checks each report's SHA-256. To reimport a revised
+  backend report after review, run `python3 scripts/import_backend_metrics.py`.
 
-The main evaluation uses figures for containment, runtime, and the audit-cost
-breakdown. Detailed outcome and latency tables remain in the appendix. The new
-figures read `evidence/application_macrobenchmarks_summary.json`, which records
-the source report's hash, cohort sizes, timer scopes, means, and SDs. The generator
-checks that source hash. Runtime plots show ratios to upstream A within each
-cohort, with SDs scaled by that same fixed baseline, not ratio confidence
-intervals. The prose also reports percentage increases: B/A 104.2% and C/A
-248.4% in replay; C/A 20.2% in the observed full workflow. The latter includes
-model and runner effects and is not isolated enforcement overhead. No box plots
-or raw distributions are inferred from the aggregates. The 20-call diagnostic
-shows the percentage of B's non-computation time spent in audit writes and is
-kept separate from the 100-call replay and five-run workflow cohorts.
+The source archives, raw samples, admission diagnostics, and body-timing records
+referenced by these reports are not included in this paper repository or present
+in the reviewed public WIP tree. No experiment was rerun during this manuscript
+edit. The source commit alone does not identify the application working-tree
+changes or substitute for the backend cohorts' frozen sources. Cedar CLI process
+and serialization behavior was checked against the WIP implementation.
+
+`sections/evaluation.tex` contains the main study, with environment and exact
+application results in `sections/evaluation_appendix.tex` and backend protocol,
+paired statistics, production-mode results, and the operation-overhead plot in
+`sections/backend_evaluation.tex`. Historical component checks and policy-only
+measurements remain in `sections/component_evidence.tex` at their original
+snapshots. E1 exposure reductions are static projections, not executed blocking.
+
+Five main figures and two tables cover the architecture, finite probe counts,
+application runtime, backend and production-mode runtime, and measured cost
+sources. Application replay costs are 2.04x for B/A and 3.48x for C/A; observed
+full-workflow C/A is 1.202x, including model and runner effects. Synthetic host
+cost is 15.30-15.63x its trusted baseline, and Linux is 11.60-17.31x the actual
+verified mode on the five measured workloads. Different policy frontends prevent
+interpreting the latter as a pure kernel-isolation tax.
+
+Cost profiles keep their denominators separate: audit is 98.1% of application B's
+non-subprocess time in the 20-call diagnostic; Cedar filtering is 65.8-66.2% of
+total synthetic host dispatch without a durable audit sink. No cross-cohort
+subtraction or unmeasured optimization speedup is claimed. Normalized whiskers
+show SDs scaled by a fixed baseline, not confidence intervals. No raw distribution
+is reconstructed. See `SUBMISSION_CHECKLIST.md` for the remaining evidence.
 
 The low-level Landlock executor, object-broker worker, and deployment-backed
 bubblewrap executor have different integration coverage. Do not transfer

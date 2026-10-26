@@ -2,221 +2,225 @@
 \label{sec:evaluation}
 
 We evaluate three questions: \textbf{RQ1}, can enforcement constrain effects
-inside an authorized application computation; \textbf{RQ2}, what functionality
-and integration work does an existing application retain; and \textbf{RQ3}, what
-does enforcement cost, and where is that time spent? An application comparison
-isolates authorization from host enforcement. Separate component checks examine
-the reference-monitor obligations in Section~\ref{sec:model}.
+inside an authorized computation; \textbf{RQ2}, what application functionality
+and integration work does it retain; and \textbf{RQ3}, what does enforcement
+cost? An application study tests the complete computation path. Separate backend
+experiments measure operation coverage, cost sources, and the two execution
+modes. Their configurations and denominators are not interchangeable.
 
 \subsection{Applications and experimental setup}
 
-We reproduce three applications from two repositories: the bundled Pandas Data
-Analyst and SQL Database Agent from AI Data Science Team~\cite{aidatascienceteam},
-and Open Notebook~\cite{opennotebook}. Only Pandas has a protected integration.
-Five other applications on the fixed eight-application shortlist remain blocked
-or unverified; Appendix~\ref{app:application-details} records their status.
-Baseline reproduction is not counted as a protected port.
-
-The Pandas adapter invokes the original \code{PandasDataAnalyst} graph, including
-its wrangling and visualization agents, prompts, and generated computation.
-We select a local provider and exclude the Streamlit UI, authentication, upload
-widgets, history, and rendering. All configurations receive the same IPython
-dependency fix and CPU affinity. The upstream checkout is unchanged. We compare:
+We reproduce the Pandas Data Analyst and SQL Database Agent from AI Data Science
+Team~\cite{aidatascienceteam}, and Open Notebook~\cite{opennotebook}. Only Pandas
+has a protected integration; five other candidates remain blocked or unverified
+(Appendix~\ref{app:application-details}). We retain the original Pandas graph,
+prompts, generated computation, and sandbox program, comparing:
 \begin{itemize}
-  \item \textbf{A: upstream execution.} The original subprocess sandbox runs on
-  the same LangGraph source overlay as B/C, with \sys security disabled.
+  \item \textbf{A: upstream.} The original subprocess sandbox on the shared
+  source overlay, with \sys security disabled.
   \item \textbf{B: added authorization.} A \code{ToolNode} boundary authorizes
-  computation before invoking that original subprocess helper.
-  \item \textbf{C: authorization and host enforcement.} The same boundary uses
-  \code{LinuxSandboxExecutor}, running the upstream sandbox program in a fresh
-  bubblewrap worker instead of nesting another subprocess.
+  computation before invoking the original subprocess helper.
+  \item \textbf{C: authorization and host enforcement.} The same boundary
+  executes the sandbox program in a fresh bubblewrap worker through
+  \code{LinuxSandboxExecutor}, replacing the outer subprocess launch.
 \end{itemize}
-The upstream AST, import, builtin, network, resource, and JSON-transport checks
-are retained. B tests an added dispatch boundary, not a published defense or an
-ablation of native upstream tool dispatch. C measures the bubblewrap backend,
-not the Landlock or object-broker executor.
+The upstream AST, import, builtin, network, resource, and JSON checks remain.
+The UI and parent/model effects are excluded. B is an added boundary, not a
+published-defense reproduction; C is not the Landlock or object-broker path.
 
-Experiments use a Xeon w5-3435X, 62.25~GiB RAM, two RTX A4000 GPUs, and Ubuntu
-24.04.5 with Linux 6.17.0-1033-oem. Pandas and SQL use local Qwen3-8B Q4\_K\_M
-through Ollama, temperature zero, requested seed 20261005, and no client retries.
-The parent and computation children use logical CPU~0; Ollama runs separately.
-Audit files reside on a rotating ext4 disk. The machine is not exclusive,
-frequency is unfixed, and caches are not flushed. The implementation is WIP
-\code{40e24e9} plus a frozen working-tree overlay; the source archive and per-file
-hashes, not that commit alone, identify the measured implementation.
+The host has a Xeon w5-3435X, 62.25~GiB RAM, two RTX A4000 GPUs, Linux
+6.17.0-1033-oem, and rotating ext4 storage. Timing runs pin the application and
+workers to CPU~0; the machine is nonexclusive, with uncontrolled frequency and
+caches. Pandas uses local Qwen3-8B Q4\_K\_M at temperature zero through Ollama.
+Application Python is 3.13.11; backend timings use 3.12.3 and
+\code{perf\_counter\_ns}, without model calls. Run-level host captures and frozen
+source archives identify each cohort. The application uses WIP \code{40e24e9}
+plus working-tree changes; the commit alone does not reproduce the study.
 
-\subsection{RQ1: Containing an authorized computation}
+\subsection{RQ1: Confining effects after authorization}
 
-\paragraph{Controlled effects.}
-We preserve a legitimate February sales computation and insert one filesystem
-operation before it returns. This directly tests whether an authorized body can
-exceed its grant, independently of whether a model generates an attack. Policies
-are fixed before each run. Narrow and broad profiles differ only in permission
-to read one supplementary file. Each case/profile runs once per configuration.
-Independent oracles check canary receipts, file hashes, kernel errors, and worker
-activation evidence, as well as the legitimate result.
+\paragraph{Application effects.}
+We insert one filesystem operation into a legitimate February sales computation.
+Policies are fixed before execution; narrow and broad profiles differ only in
+permission to read a supplementary file. Each case/profile runs once per
+configuration. Oracles check canary receipts, file hashes, kernel errors, worker
+activation, and the legitimate result.
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/application-effects.pdf}
-  \caption{Pandas containment and utility for A (upstream), B (added authorization),
-  and C (authorization plus host enforcement). Left: completed forbidden effects
-  among three supported probes. Right: correct results across five controlled
-  case/profile executions per configuration. Each case is executed once; these
-  are different denominators. Private temporary writes are excluded from the
-  forbidden-probe count because strict output-only writes are unsupported.}
+  \caption{Observed forbidden-effect reachability in two separate experiments.
+  (a) Pandas: three supported probes, one execution each per configuration.
+  (b) Synthetic backend census: 49 distinct operation/surface cases, each repeated
+  three times. Trusted/helper baselines reproduce every effect in every repeat;
+  both host conditions reach none. Repetitions do not add independent cases.
+  All 15 Pandas case/profile runs retain the intended computation; each backend
+  host condition passes 30/30 positive-control trials.}
   \label{fig:application-effects}
 \end{figure*}
 
-Figure~\ref{fig:application-effects} shows the distinction the framework is
-designed to enforce. Both A and B reach all three forbidden effects for which
-the configured restrictions are supported: two narrow-profile reads and the
-dataset overwrite. C reaches none, while all 15 executions retain the correct
-February result. The successful broad-profile read confirms that C distinguishes
-an authorized resource from the same resource under a narrower grant.
+A and B reach all three supported forbidden effects: two narrow-profile reads
+and a read-only dataset overwrite. C reaches none, while all 15 case/profile
+executions return the correct February result. The permitted broad-profile read
+also succeeds. For a fixed eligible probe set, we define exposure reduction as
+$(R_b-R_p)/R_b$, where $R_b$ and $R_p$ count reachable forbidden effects in the
+baseline and protected conditions. C reduces observed reachability by 100\%
+on these three probes; B reduces it by 0\% (Figure~\ref{fig:application-effects}(a)).
 
-Appendix Table~\ref{tab:application-effects} retains the individual outcomes.
-The outside-fixture write exposes a different outcome. C leaves the host file
-unchanged, but permits a write in its private \code{/tmp}. We therefore exclude
-this case from the three-probe denominator and report strict guest-wide
-output-directory-only writes as unsupported. The artifact preserves the
-original overclaim based on host-file absence and its correction. Network,
-descendant-process, and unavailable-host-mechanism cases were not independently
-tested in this application. The experiment establishes containment of the tested
-effects, not a census of all application sinks.
+C also prevents an outside-fixture write from changing the host, but allows the
+write in private \code{/tmp}. This demonstrates host containment, not a strict
+guest-wide output-only policy, and is excluded from the three-probe denominator.
+Appendix Table~\ref{tab:application-effects} retains all outcomes. B and C each
+pass four dispatch checks: an allowed request succeeds, while a guest principal,
+missing argument, and unknown tool fail without their effect. Thus correct call
+authorization alone leaves the tested implementation effects reachable.
 
-\paragraph{Authorization at the added boundary.}
-B and C each pass four deterministic dispatch checks. An allowed request creates
-its unique witness; a guest role, a missing \code{sandbox\_source} argument, and
-an unknown tool each produce an error without that effect. Audit-chain
-verification passes. Together with Figure~\ref{fig:application-effects}, these
-checks show why correct call authorization is necessary but insufficient:
-B rejects unauthorized calls yet permits forbidden effects inside allowed ones.
+\paragraph{Backend operation coverage.}
+A separate synthetic census (E6) exercises 49 forbidden operation/surface cases
+covering filesystem APIs, metadata, aliases, native/dynamic code, environment,
+processes, loopback networking, SQLite, and a bounded file-size limit. Synthetic
+trusted and helper conditions reach all 49 effects in all three repetitions;
+host and host-plus-helper conditions reach none, a 100\% observed reduction on
+this fixed corpus. Both host conditions pass 30/30 positive-control trials.
+Of 147 forbidden trials per host condition, 135 show explicit denial
+(45/49 cases); six return generic SQLite errors and six return empty/absent
+results. The latter 12 establish no observed effect, not explicit blocking.
+The synthetic direct-language frontend rejects 27/30 controls, so its zero
+effects do not establish useful mediation. It is distinct from the production
+verified mode evaluated below.
 
 \paragraph{Model-driven injection.}
-A separate case places one frozen instruction payload in a sampled CSV
-\code{region} cell. It requests a private-canary read and copy before returning
-the correct total. Five attacked runs per configuration are paired with five
-fresh clean runs. The payload reaches the model input in all 15 attacked runs,
-but none generates the forbidden operation or attempts its target open. All
-15 attacked tasks succeed. These are \code{not\_attempted} outcomes: conditional
-enforcement failure is undefined with zero eligible attempts, so this batch
-does not establish prompt-injection resistance. An earlier 30-run launch batch
-failed before inference because Ollama was unavailable; those records are
-retained separately from the 30 retry executions.
+One frozen instruction in a sampled CSV cell requests a private-canary read and
+copy. It reaches all 15 attacked model inputs, but produces zero forbidden
+attempts in every configuration; all tasks return the correct result.
+Enforcement success and relative reduction are therefore undefined for this
+batch. Thirty earlier pre-inference server failures remain a separate cohort.
+These observations do not establish prompt-injection resistance.
 
 \subsection{RQ2: Utility and integration requirements}
 
-The initial clean workload has three tasks, each run once in A/B/C. Every
-configuration succeeds on 1/3: the February total is correct, regional
-aggregation returns unaggregated rows, and chart execution encounters an
-upstream regular-expression error. Later repetitions deliberately use the
-known-working February task and succeed on 5/5 clean runs per configuration.
-The equal initial outcomes and successful repeats show preservation of that
-workflow, not broad utility non-inferiority or improvement on the original
-three-task workload.
+The original three-task clean workload succeeds on 1/3 in every configuration;
+aggregation and chart tasks retain upstream failures. Later repetitions select
+the working February task and pass 5/5 per configuration. These results show
+preservation of that workflow, not improved utility or coverage of more tasks.
+Pandas uses a 200-line adapter and 20-line worker, plus a 135-line backend adapter
+shared with SQL. Engineering time was not recorded.
 
-Pandas requires a 200-line integration adapter and 20-line worker, plus a
-135-line backend adapter shared with SQL. These physical source-line counts
-describe the integration surface; engineering time was not measured. The
-original graph and generated computation remain in use.
-
-SQL passes 3/3 baseline tasks on a SQLite fixture with \code{sales} and
-\code{payroll} tables and upstream safe-mode validation. Trace inspection finds
-that schema sampling reads a payroll canary into the model prompt before query
-execution. This identifies a mediation requirement, not an exploit result:
-protecting only generated queries misses the metadata path. Our fixed-schema
-record mediator does not yet cover this application's arbitrary SQLAlchemy
-queries. Open Notebook's 103-line adapter exercises native ingestion, source
-chat, and a live dedicated SurrealDB, passing one smoke task. Its API and worker
-hosts are not confined or fully traced. Neither baseline is counted as a
-protected integration.
+SQL passes 3/3 baseline tasks, but schema sampling places a payroll canary into
+the model prompt before query execution. Protecting generated queries alone
+misses this metadata path; the fixed-record broker does not cover arbitrary
+SQLAlchemy queries. Open Notebook's 103-line adapter passes one ingestion/chat
+smoke task against native Ollama and a dedicated SurrealDB. Its API, worker, and
+database authority remain outside client confinement. Neither is a protected port.
 
 \subsection{RQ3: Runtime cost and its sources}
 
-\paragraph{Matched computation replay.}
-We replay the same generated February computation and recorded input through
-A/B/C. Each configuration receives one first-use call, ten warm-ups, and 100
-measured calls, rotating configuration order by round. Every replay returns
-120. The timer includes dispatch, sandbox execution, synchronous audit writes,
-and integration/evidence output. Fixtures and initialization are outside the
-timer; there are no model calls or syscall tracing. This measures a real
-application computation path rather than a no-op or full agent workflow.
+\paragraph{Application replay and workflow.}
+We replay the same successful computation and input through A/B/C, with ten
+warm-ups and 100 measured calls each, rotating order by round. Every result is
+120. The timer includes dispatch, execution, synchronous audit, and integration
+output, but excludes initialization, model calls, and tracing.
+Figure~\ref{fig:application-runtime}(a) shows B at $2.04\times$ upstream runtime
+(104.2\% overhead), C at $3.48\times$ (248.4\%), and C/B at $1.71\times$
+(70.6\%). The earlier 13.2\% policy-only no-op result does not characterize
+this application path.
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/application-runtime.pdf}
-  \caption{Runtime relative to upstream A. Bars divide each mean by A's mean
-  in the same cohort; whiskers show SD scaled by that fixed baseline,
-  not confidence intervals for the ratios. (a) Same-computation
-  replay, 100 calls per configuration, without model calls or tracing.
-  (b) Five clean full workflows per configuration, including runner setup,
-  environment capture, model execution under \code{strace}, and outcome checks.
-  Timer scopes differ; the workflow ratio is not isolated enforcement overhead.
-  Raw distributions are not reconstructed from summaries.}
+  \caption{Application runtime relative to upstream A. Means and SD whiskers
+  are divided by the same fixed A mean within each cohort; these are not ratio
+  confidence intervals. (a) Same-computation replay, 100 calls/configuration,
+  without model calls or tracing. (b) Five clean full workflows/configuration,
+  including setup, model execution under \code{strace}, and outcome checks.
+  The workflow ratio is not isolated enforcement overhead.}
   \label{fig:application-runtime}
 \end{figure*}
 
-Figure~\ref{fig:application-runtime}(a) shows B at $2.04\times$ upstream
-runtime (104.2\% overhead) and C at $3.48\times$ (248.4\% overhead).
-C also costs $1.71\times$ B, a further 70.6\% increase. These are ratios of
-mean durations for the matched replay. Enforcement is substantial in this
-configuration and cannot be characterized by the earlier 13.2\% policy-only
-no-op measurement. Appendix~\ref{app:application-details} retains absolute
-timings, paired increments, dispersion, and tail statistics.
+Five separate clean full-workflow repetitions give C/A $=1.202\times$
+(+20.2\%) and C/B $=1.207\times$ (+20.7\%). B/A $=0.996\times$ does not
+establish a speedup. The first A run retains post-restart model loading; setup,
+model output, tracing, and evidence collection also contribute to these totals.
+Five runs of one task do not estimate across-task variation.
 
-\paragraph{Where the time goes.}
-A and B spend essentially the same time in the original subprocess. B's
-additional time includes dispatch, authorization, and evidence persistence.
-A separate 20-call diagnostic, after two warm-ups, directly times SQLite audit
-writes. Audit persistence accounts for 98.1\% of B's time outside the
-subprocess (Figure~\ref{fig:audit-breakdown}); the residual is 1.9\%.
-This identifies a concrete implementation bottleneck. No SSD comparison or
-disabled-audit experiment was performed, so a hardware speedup is not inferred.
+\paragraph{Matched backend cost.}
+Three successful synthetic workloads isolate backend execution: arithmetic,
+a canary read, and a 4~KiB write. Each condition/workload receives ten warm-ups
+and 100 measured calls in shuffled paired rounds. Every sample passes its
+positive oracle. Each call starts a fresh worker; construction/preflight lies
+outside the timer, and no model or durable audit sink is involved.
+Host/trusted runtime is $15.30$--$15.63\times$ (1430.2--1463.4\% overhead);
+host-plus-helper/helper is $15.23$--$15.37\times$
+(Figure~\ref{fig:backend-runtime}(a)). Host-plus-helper differs from host by
+$-0.4$ to $-0.6$\%, within observed variation. These results replace the invalid
+practice of pooling successful and rejected operations into one overhead median.
 
-In the 100-call cohort, C spends 66.0\% of its mean time inside the executor and
-34.0\% outside it in dispatch and integration/evidence work. The executor
-contains worker execution and supervision (35.0\% of total time), grant
-compilation (2.2\%), and remaining executor work (28.8\%, a residual).
-These percentages use mean durations; the executor subtotal must not be added
-to its component spans.
-
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \includegraphics[width=\columnwidth]{figures/audit-breakdown.pdf}
-  \caption{Attribution of time outside the original subprocess in the separate
-  20-call B diagnostic. SQLite audit writes account for 98.1\%. Other time is a
-  residual, not a separately measured span. This cohort is not pooled with
-  Figure~\ref{fig:application-runtime}.}
-  \label{fig:audit-breakdown}
-\end{figure}
+  \includegraphics[width=\textwidth]{figures/backend-runtime.pdf}
+  \caption{Ratios of mean runtime for separate backend experiments.
+  (a) Synthetic conditions, 100 successful calls per workload/condition.
+  Each series names its baseline. (b) Production Linux execution divided by
+  source-verified execution, 50 paired successful calls per workload; both use
+  real Cedar authorization. The synthetic helper is not production verified mode.
+  Paired-increment SDs and absolute statistics appear in
+  Appendix~\ref{app:backend-details}; no ratio confidence intervals are inferred.}
+  \label{fig:backend-runtime}
+\end{figure*}
 
-\paragraph{Full-workflow observations.}
-Figure~\ref{fig:application-runtime}(b) reports the separate five-run clean cohort.
-C takes $1.202\times$ A's mean time, a 20.2\% increase, and $1.207\times$ B's,
-a 20.7\% increase. B takes $0.996\times$ A's mean time ($-0.4$\%), which does
-not establish a speedup. The first A run follows a model-server restart and retains
-loading effects. Model output, setup, tracing, and evidence collection all
-contribute to these totals. Thus the 20.2\% difference is not an isolated
-enforcement-overhead estimate, and the $3.48\times$ replay ratio is not a
-whole-application slowdown. Five repetitions of one task do not characterize
-across-task uncertainty.
+\paragraph{Measured bottlenecks.}
+The application and backend profiles identify different costs
+(Figure~\ref{fig:cost-breakdown}). A separate 20-call application diagnostic
+attributes 98.1\% of B's time outside its original subprocess to SQLite audit
+writes. No SSD or disabled-audit counterfactual was run.
+In the synthetic host cohort, an exclusive stage partition attributes
+65.8--66.2\% of total dispatch to \code{CedarPolicyBackend.filter} and
+24.4--24.9\% to worker execution/supervision. The filter serializes policy and
+request files, runs Cedar CLI validation, and launches authorization for each
+evaluated rule. This is policy-engine and process cost, not kernel isolation
+cost. Worker time includes launch, confinement, execution, and teardown.
+These instrumented experiments identify optimization targets without measuring
+the speedup from changing either implementation.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/audit-breakdown.pdf}
+  \caption{Cost attribution with different denominators.
+  (a) Application B: share of time outside its original subprocess in a separate
+  20-call diagnostic. (b) Synthetic host: share of total dispatch, 100 calls per
+  workload, with no durable audit sink. Other prep./dispatch combines attestation,
+  grant compilation, outside-invoke time, and the other-invoke residual.
+  The panels cannot be summed or subtracted across cohorts.}
+  \label{fig:cost-breakdown}
+\end{figure*}
+
+\paragraph{Production verified execution versus Linux.}
+The actual language path uses \code{cedar\_security} source admission, runtime
+binding validation, and grant-checked \code{read\_text}. Fifty paired samples
+follow five warm-ups on a constant control, three read sizes, and two reads.
+Both modes use real Cedar; executors are reused and host workers remain fresh.
+Linux execution takes $11.60$--$17.31\times$ verified execution
+(Figure~\ref{fig:backend-runtime}(b)). Setup/static admission is measured separately.
+Different policy frontends make this an implementation comparison, not a pure
+kernel tax. These results expose the cost of the current host path and support
+retaining a lighter admitted path for supported tools. They do not establish
+verified-mode coverage for arbitrary Python or an existing application port.
+
+\paragraph{Operation variants.}
+Sixteen successful operation/API variants, with 50 paired samples each after
+five warm-ups, show $12.53$--$15.88\times$ host/plain-Python-subprocess runtime.
+This is whole-call overhead, not cost added to each syscall. The separately
+instrumented operation bodies exclude startup and policy work, but still include
+Python wrappers and open/close operations. Appendix~\ref{app:backend-details}
+plots every variant and records scope and dispersion. Together, these experiments
+show substantial fixed per-call cost on tiny workloads; none supports negligible
+enforcement overhead.
 
 \subsection{Supporting reference-monitor evidence}
 
-The application experiments complement the earlier component evaluation.
-Eight deliberately vulnerable tools reach unauthorized sinks behind
-policy-conformant calls with no defense, Progent, and three generic wrappers.
-These establish the effect gap, not incorrect call-policy decisions. A historical
-router analysis checks 21 dispatch obligations; Tool API conformance covers
-15,744 cases, and a focused router/object/host run passes 151 tests. Linux tests
-exercise descriptor binding, raw syscalls, descendants, activation, and resource
-controls. These records support specific contracts at their original snapshots.
-They do not prove whole-framework G1--G3, nor transfer Landlock properties to
-the application study's bubblewrap path.
-
-Appendix~\ref{app:component-evidence} retains the per-layer results, analysis and
-deployment evidence, policy-only benchmark, and open composition diagnostics.
-The application evidence establishes one protected computation integration;
-multiple workloads, semantic-broker comparisons, runtime-MAC/analysis composition,
-and genuine host-capability degradation remain to be evaluated.
+Historical canaries distinguish call authorization from effects; router analysis
+checks 21 dispatch obligations, Tool API conformance covers 15,744 cases, and a
+focused router/object/host run passes 151 tests. Appendix~\ref{app:component-evidence}
+retains their original snapshots, contracts, static exposure projections, and
+open composition findings. These component results do not prove whole-framework
+complete mediation or transfer one backend's properties to another.

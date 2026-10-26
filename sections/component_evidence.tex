@@ -32,6 +32,14 @@ covered. We separately reproduced one narrower post-validation case in which a
 value trusted at the policy boundary became an absolute path during resolution.
 That 1/1 result is not a general bypass claim against CaMeL.
 
+\paragraph{Static exposure projection.}
+The E1 adapter model projects eight exposed headline sinks to four under its
+host model and zero under composed models: projected reductions of 50\% and
+100\%. These are capability-to-sink projections, not runtime enforcement
+measurements. The host model includes capabilities beyond the measured Linux
+filesystem adapter. These counts are not pooled with the 49-case E6 census or
+the application's three supported probes.
+
 \subsection{Layered checks and open coverage}
 
 Table~\ref{tab:evidence} reports evidence at each layer. The router analyzer
@@ -143,6 +151,7 @@ relative cost.
 The absolute increments are 78.511~$\mu$s and 291.099~$\mu$s. These results
 isolate policy composition, not end-to-end confinement. We deliberately do not
 extrapolate fresh-worker latency from them. Section~\ref{sec:evaluation}
-separately reports bubblewrap application measurements; Landlock fresh-worker
-measurements remain required on the release revision.
+separately reports application and matched backend experiments. Their frozen
+source archives identify the exercised implementation; extrapolation to another
+executor or the release revision requires a new measurement.
 
