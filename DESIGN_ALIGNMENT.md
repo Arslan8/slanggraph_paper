@@ -100,3 +100,28 @@ Writing references reread for structure, not additional novelty claims:
   comparison. No security results from that paper are attributed to slangGraph.
 
 No new security experiments or benchmark results were added by this rewrite.
+
+## Reference-monitor grounding
+
+The security model now follows EC Kernel (ECK), Section VI-B1, in presenting
+complete mediation, tamperproofness, and verifiability as G1-G3. The citations
+trace these requirements to Anderson's 1972 report and Jaeger's 2011
+"Reference Monitor" entry, which EC itself cites. The additional monotonic
+composition requirement is identified separately.
+
+The discussion maps those obligations to tool effects, framework operations,
+protected policy/grant/provenance state, and execution configuration. Verifiability
+means assurance about the enforcement implementation. A runtime activation
+receipt alone does not establish it. ECK's formal verification is attributed
+only to ECK; slangGraph retains its reported component evidence and conditional
+security argument.
+
+Related work now cites EC's separation of compiler-driven compartment
+identification from protected runtime enforcement. The analogy concerns
+architecture, not reuse of ECK's hardware mechanism or verification results.
+
+Sources checked:
+
+- [EC, IEEE S&P 2023, Sections VI-B and VI-C](https://www.cs.purdue.edu/homes/dxu/pubs/SP23_EC.pdf).
+- [Anderson, Computer Security Technology Planning Study, Volume II, Sections 3.4 and 4.1.1](https://csrc.nist.gov/files/pubs/conference/1998/10/08/proceedings-of-the-21st-nissc-1998/final/docs/early-cs-papers/ande72.pdf).
+- [Jaeger, Reference Monitor, 2011](https://doi.org/10.1007/978-1-4419-5906-5_646).

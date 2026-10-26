@@ -260,24 +260,35 @@ execution and resource boundaries below.
 
 \subsection{Reference-monitor requirements}
 
-We adapt the classic reference-monitor requirements to an agent runtime. The
-boundary must provide:
+Following EC's Embedded Compartmentalizer Kernel (ECK), we organize enforcement
+around complete mediation, tamperproofness, and verifiability~\cite{khan2023ec}.
+These are the classical
+reference-monitor obligations~\cite{anderson1972reference,jaeger2011reference};
+here they apply across the agent runtime and its execution backends.
 
-\paragraph{Complete mediation.}
-Every operation on an in-scope object must cross a refusing path. Scope cannot
-depend on whether the default policy happens to allow an operation.
+\paragraph{G1: Complete mediation.}
+Every operation on an in-scope object must pass an authorization check that can
+deny the operation before it occurs. This includes effects inside tools and
+later model and output operations. Checking only the tool-call boundary leaves
+the implementation's own accesses unchecked.
 
-\paragraph{Tamper resistance.}
-Untrusted tools and nodes cannot modify the router, policy, grant, audit state,
-or another tool's execution authority. They do not execute in the coordinator.
+\paragraph{G2: Tamperproofness.}
+Code outside the TCB must not modify the monitor, policy, grants, provenance, or
+confinement configuration. \sys separates hostile native code from the
+coordinator and admits in-process tool bodies only under a restricted API
+contract. Bootstrap code and resource mediators remain trusted.
 
-\paragraph{Verifiable enforcement.}
-The system records not only the authorization decision, but also how every grant
-line was enforced and whether those mechanisms were active for this worker.
+\paragraph{G3: Verifiability.}
+The enforcement mechanism must be sufficiently bounded and explicit to support
+systematic analysis of G1, G2, and authorization correctness. \sys exposes
+dispatch and adapter contracts for this purpose;
+Section~\ref{sec:evaluation} reports the current component checks. Activation
+receipts bind a worker to enforced mechanisms, but do not prove monitor
+correctness.
 
-\paragraph{Monotonic authority.}
-Preparation, delegation, policy modules, and lowering may preserve or reduce
-authority; they may not silently widen it. An unsupported required obligation
+\paragraph{Monotonic authority under composition.}
+We additionally require that preparation, delegation, policy modules, and
+lowering preserve or reduce authority. An unsupported required obligation
 denies. Explicit waivers are limited to obligations eligible for degradation;
 they do not waive identity binding, default deny, or isolation before import.
 Degraded executions do not carry the complete grant-subset claim. The
@@ -986,6 +997,11 @@ attack success and utility. Our canaries isolate whether an admitted
 implementation retains unauthorized authority; the questions are complementary.
 
 \paragraph{Reference monitors and hook placement.}
+EC separates compiler-driven compartment identification from ECK's runtime
+enforcement. ECK protects memory-protection configuration and verifies its small
+monitor~\cite{khan2023ec}. \sys adopts this separation for independently produced
+agent requirements: identifying authority does not enforce it, and the
+enforcement boundary must itself remain protected.
 LSM separates fixed mediation hooks from policy, preserves discretionary checks,
 and supports restrictive module composition~\cite{wright2002lsm,linuxlsm}.
 SELinux user-space object managers extend the same architecture beyond kernel
