@@ -1,0 +1,43 @@
+{
+  "source_file": "application_macrobenchmarks_source.md",
+  "source_sha256": "2126874e8a11cdddcdd8ac5125197788d6f21e7559f77d6567e3f9dc343afd7c",
+  "evidence_type": "Reported aggregates transcribed from the supplied application study; no raw samples or rerun implied",
+  "configurations": ["A", "B", "C"],
+  "configuration_descriptions": ["Upstream", "Authorization", "Auth. + host"],
+  "controlled_effects": {
+    "forbidden_effects_reached": [3, 3, 0],
+    "supported_forbidden_probes_per_configuration": 3,
+    "correct_computations": [5, 5, 5],
+    "case_profile_executions_per_configuration": 5,
+    "scope": "One execution per case/profile. Two narrow-profile reads and the dataset overwrite form the forbidden denominator. Private /tmp writes are excluded from that denominator as unsupported. Correct computation counts include all five case/profile executions."
+  },
+  "local_replay": {
+    "unit": "ms",
+    "measured_calls_per_configuration": 100,
+    "warmups_per_configuration": 10,
+    "mean": [267.19, 545.54, 930.93],
+    "sd": [6.84, 31.53, 42.95],
+    "median": [265.00, 544.34, 916.64],
+    "p95": [280.56, 583.76, 1010.42],
+    "scope": "Same generated February computation and input. No model calls or tracing. Includes dispatch, worker execution, synchronous audit and integration evidence output."
+  },
+  "full_workflow": {
+    "unit": "s",
+    "clean_runs_per_configuration": 5,
+    "mean": [12.777, 12.725, 15.354],
+    "sd": [1.410, 0.195, 0.118],
+    "median": [12.236, 12.736, 15.298],
+    "successes": [5, 5, 5],
+    "scope": "Known-working clean February task. Includes runner setup, environment capture, model-driven application under strace, and outcome oracle. First A run retains model loading effects."
+  },
+  "audit_diagnostic_b": {
+    "unit": "ms",
+    "measured_calls": 20,
+    "warmups": 2,
+    "mean_total": 544.34,
+    "mean_subprocess": 265.09,
+    "mean_audit": 273.94,
+    "audit_sd": 32.12,
+    "scope": "Separate B diagnostic cohort. Other time is total minus subprocess and cumulative SQLite audit write spans. No measured span is added to its enclosing span. Rotating disk; no SSD comparison."
+  }
+}

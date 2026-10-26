@@ -163,7 +163,8 @@ Interpretation constraints preserved:
   from the supplied report, not reconstructed from marginal summaries.
 - No box plot or distribution was synthesized from aggregate statistics. The
   attachment references runtime images and raw samples that were not attached;
-  the manuscript uses tables of the reported aggregates.
+  the manuscript plots reported counts and relative means with scaled SDs,
+  with exact absolute summary tables retained in the appendix.
 - New application citations identify upstream sources and revisions. Their
   commit identities were checked through GitHub, not used as evidence for
   experiments performed on the unavailable overlay.
@@ -173,3 +174,42 @@ Arithmetic checks confirm the reported mean differences and rounded ratios:
 2.577 s C-A and 20.2% in the recorded full workflow; audit writes account for
 98.1% of the diagnostic B remainder. No new performance/security result is
 claimed from editing or building the paper.
+
+## Language boundary and evaluation figures
+
+Table 1 adds an independent language-sandbox column under execution enforcement.
+Its definition is a restricted language and API set constraining executable agent
+code, distinct from host lowering, policy-language evaluation, and having two
+tool execution paths. CaMeL and slangGraph are both marked as implemented, with
+different scopes stated in the caption:
+
+- CaMeL's restricted interpreter executes orchestration code. Its AgentDojo
+  adapter invokes the native tool through `runtime.run_function`, outside that
+  interpreter. Evidence: the CaMeL paper Section 4.4 and pinned source
+  `src/camel/interpreter/interpreter.py` and
+  `src/camel/pipeline_elements/agentdojo_function.py` at `f083b6b`.
+- slangGraph checks supported tool bodies against manifests and the approved
+  monitored API vocabulary, then rechecks bindings at dispatch. Trusted setup,
+  imports, and resource mediators remain outside the body certificate. Evidence:
+  `docs/security/manifest-consistency.md` at WIP `40e24e9`.
+- Other rows retain their reviewed integration scopes. A policy DSL is not an
+  application-code sandbox. In particular, FORGE/SASY's `sasy-policy` compile
+  and evaluator sandboxes isolate policy evaluation, not agent tool bodies;
+  these are also OS-level mechanisms, not a restricted agent language.
+
+The main paper now has four figures and two tables. Three new evaluation figures
+replace the main result tables: controlled-effect counts and retained computation,
+two separately normalized runtime panels, and the separately measured B audit-cost
+diagnostic. Detailed tables move to the application appendix. All plots read
+`evidence/application_macrobenchmarks_summary.json`, whose source SHA-256 is
+checked by the figure generator. Counts retain their distinct denominators.
+Within each runtime panel, means and SDs are divided by the fixed upstream A
+mean for that cohort. Error bars show scaled SDs, not ratio confidence intervals.
+Replay ratios are B/A 2.04x, C/A 3.48x, and C/B 1.71x (104.2%, 248.4%, and
+70.6% increases). Full-workflow C/A is 1.202x (20.2% increase), with its model,
+startup, and tracing confounds preserved. Absolute timings and paired differences
+remain in the appendix. The audit residual is computed as
+544.34 - 265.09 - 273.94 = 5.31 ms; the plot shows audit/residual shares of
+98.1%/1.9% of time outside B's subprocess. No nested span or separate cohort
+is added to the replay totals. The historical deployment observation now also
+states its relative cost, 1.47x (47.1%), alongside absolute means.

@@ -82,10 +82,27 @@ malicious parent. Model-judged quality is not used as the security oracle.
 \paragraph{Additional timing statistics.}
 Local-replay variances for A/B/C are 46.80, 993.96, and 1,844.46~ms$^2$.
 Full-workflow variances are 1.989, 0.038, and 0.014~s$^2$, with ranges
-11.986--15.293, 12.437--12.979, and 15.243--15.543~s. The paired differences
-and SDs in Section~\ref{sec:evaluation} are reported from the study; paired SDs
-cannot be reconstructed from marginal summaries alone. The 20-call audit
-diagnostic remains separate from the 100-call replay cohort.
+11.986--15.293, 12.437--12.979, and 15.243--15.543~s.
+Replay paired increments are 278.35~ms for B--A (SD 32.91~ms),
+663.74~ms for C--A (SD 42.55~ms), and 385.39~ms for C--B (SD 54.98~ms).
+Full-workflow paired increments are 2.577~s for C--A (SD 1.446~s),
+2.629~s for C--B (SD 0.216~s), and $-0.052$~s for B--A (SD 1.581~s).
+These paired SDs come from the study; they cannot be reconstructed from
+marginal summaries alone. The main figures normalize means and SDs by the
+fixed A mean within each cohort, rather than estimating a distribution of ratios.
+
+The 100-call replay records mean original-subprocess spans of 267.11~ms in A
+and 267.03~ms in B, leaving 278.51~ms outside that subprocess in B.
+C's executor averages 614.54~ms, including grant compilation (20.56~ms),
+worker execution and supervision (325.58~ms), and a reported residual
+(268.41~ms, rounded). Another 316.39~ms lies outside the executor.
+Components are nested within the executor total, not additive to it.
+
+In the separate 20-call diagnostic, SQLite audit writes average 273.94~ms
+in B (SD 32.12~ms) and 274.52~ms in C (SD 8.96~ms).
+B's total is 544.34~ms and its original subprocess takes 265.09~ms.
+Of the remaining 279.25~ms, audit writes account for 98.1\%; the 5.31~ms
+residual accounts for 1.9\%. This cohort is not pooled with the replay.
 
 First-use call latencies are 283.26/525.81/949.87~ms for A/B/C. Adapter
 initialization costs are 0.05/231.62/344.96~ms after 1,121.86~ms of shared imports.
@@ -105,3 +122,66 @@ directories distinguish the runtime, audit-profile, dispatch, failed-launch,
 and retry cohorts. These records and the exact implementation overlay must
 accompany the anonymous artifact; a source commit by itself cannot reproduce
 the application study.
+
+\subsection{Detailed application results}
+
+The main figures summarize these exact reported outcomes and timing statistics.
+The tables retain absolute timings, medians, and replay tails behind the
+normalized mean/SD plots. Counts use the denominators defined in
+Section~\ref{sec:evaluation}.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lXX X}
+\toprule
+Operation / profile & A: upstream & B: added authorization & C: authorization + host enforcement \\
+\midrule
+Read unrelated file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Read supplementary file / narrow & Canary copied & Canary copied & \code{ENOENT}; no canary receipt \\
+Same supplementary read / broad & Read succeeds & Read succeeds & Read succeeds \\
+Write outside host fixture & Host file created & Host file created & Host unchanged; private \code{/tmp} write succeeds \\
+Overwrite dataset / narrow & Dataset modified & Dataset modified & \code{EROFS}; dataset hash unchanged \\
+\bottomrule
+\end{tabularx}
+\caption{Effects inside an authorized Pandas computation. Each cell is one
+execution; all 15 executions return the correct February result. The dataset
+overwrite is a separately recorded diagnostic amendment. A private temporary
+write is host containment, not denial of all writes outside the output directory.}
+\label{tab:application-effects}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & P95 \\
+\midrule
+A & 267.19 & 6.84 & 265.00 & 280.56 \\
+B & 545.54 & 31.53 & 544.34 & 583.76 \\
+C & 930.93 & 42.95 & 916.64 & 1,010.42 \\
+\bottomrule
+\end{tabular}
+\caption{Local computation replay in milliseconds, 100 measured calls per
+configuration. SD describes variation within this trace, not across tasks.}
+\label{tab:replay-latency}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Config. & Mean & SD & Median & Success \\
+\midrule
+A & 12.777 & 1.410 & 12.236 & 5/5 \\
+B & 12.725 & 0.195 & 12.736 & 5/5 \\
+C & 15.354 & 0.118 & 15.298 & 5/5 \\
+\bottomrule
+\end{tabular}
+\caption{Recorded full-workflow time in seconds for five clean February runs
+per configuration. Scope includes runner setup, environment capture, the
+model-driven subprocess under \code{strace}, and the outcome oracle.}
+\label{tab:workflow-latency}
+\end{table}

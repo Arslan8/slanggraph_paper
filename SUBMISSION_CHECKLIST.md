@@ -137,8 +137,10 @@ Design snapshot: `40e24e978f9ec2e8f061abb21077e2251583f5e5` (WIP, October 25, 20
 - Preserve explicit policies and host-dependent outcomes. Distinguish valid
   tightening from an eligible obligation waiver; static-analysis waivers are
   not runtime permission to disable confinement.
-- Replace hard-coded plotted medians with versioned measurement inputs carrying
-  their backend, source revision, host, sample count, and dispersion. Keep
+- Replace the historical policy plot's hard-coded medians with versioned raw
+  measurement inputs. Application figures now read source-hash-bound reported
+  aggregates, but their raw traces still require artifact validation. Carry
+  backend, source revision, host, sample count, and dispersion, and keep
   publication/checkout, preparation, launch, and tool execution costs separate.
 - Check page limits and anonymity independently of `make check`, which verifies
   only basic PDF integrity and embedded fonts.

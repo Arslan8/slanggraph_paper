@@ -112,9 +112,9 @@ A separate development record reports real OSTree 2024.5 and bubblewrap on
 October 18, 2026: tool A/B identity, runtime selection A/B/A across a channel move,
 SQLite checkpoint restart, signed-commit acceptance, and unsigned-commit
 rejection. That record is distinct from a reproducible checked-in real-OSTree
-integration run. The record reports mean latency over five post-warmup
-invocations per path: 142.575~ms for the legacy secured path and 209.780~ms with
-tool deployment. These observations do not measure
+integration run. Over five post-warmup invocations per path, deployment takes
+$1.47\times$ the legacy secured path's mean time (47.1\% overhead):
+209.780~ms versus 142.575~ms. These observations do not measure
 Landlock or establish general performance. Real object pruning and the lifecycle
 cases in Section~\ref{sec:deployments} remain required experiments.
 

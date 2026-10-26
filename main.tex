@@ -34,9 +34,8 @@ separation with runtime-wide mandatory restrictions, typed pump and SQLite
 mediators, host-dependent lowering, and checks on instrumented data flows.
 In an existing data-analysis application, authorization alone permits three
 tested forbidden filesystem effects; host enforcement prevents all three while
-preserving the intended computation. Replaying that computation costs 267~ms
-upstream and 931~ms with enforcement, identifying synchronous audit persistence
-as a major source of overhead.
+preserving the intended computation. Replaying that computation takes
+$3.48\times$ upstream runtime, with synchronous audit persistence a major cost.
 \sys provides a common enforcement foundation on which independently developed
 agent-security analyses and policies can build.
 \end{abstract}
@@ -64,36 +63,37 @@ Table~\ref{tab:features} shows this separation in the compared systems.
 \begin{table*}[t]
 \centering
 \small
-\setlength{\tabcolsep}{3pt}
+\setlength{\tabcolsep}{2pt}
 \renewcommand{\arraystretch}{1.15}
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l*{10}{c}@{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l*{11}{c}@{}}
 \toprule
  & \multicolumn{4}{c}{Policy and requirements} &
- \multicolumn{4}{c}{Execution enforcement} &
+ \multicolumn{5}{c}{Execution enforcement} &
  \multicolumn{2}{c}{Composition} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(l){10-11}
+\cmidrule(lr){2-5}\cmidrule(lr){6-10}\cmidrule(l){11-12}
 \textbf{System} & \shortstack{Tool-call\\policy} & \shortstack{Flow\\tracking} &
  \shortstack{Resource\\manifests} & \shortstack{Grants +\\controls} &
- \shortstack{Host\\lowering} & \shortstack{Domain\\broker} &
+ \shortstack{Language\\sandbox} & \shortstack{Host\\lowering} & \shortstack{Domain\\broker} &
  \shortstack{Dual tool\\paths} & \shortstack{Effect\\bounds} &
  \shortstack{Invocation\\grant} & \shortstack{Shared\\inference\\contract} \\
 \midrule
-Progent~\cite{progent,progentcode} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-CaMeL~\cite{camel,camelcode} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-FORGE~\cite{forgecode} & $\checkmark$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-SEAgent~\cite{seagent} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-OPA tool calling~\cite{opatools} & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-APF + OpenShell~\cite{apf} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
-nono~\cite{nono} & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
-Sandlock~\cite{sandlock} & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
+Progent~\cite{progent,progentcode} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+CaMeL~\cite{camel,camelcode} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\ddagger}$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+FORGE~\cite{forgecode} & $\checkmark$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+SEAgent~\cite{seagent} & $\checkmark$ & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+OPA tool calling~\cite{opatools} & $\checkmark$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+APF + OpenShell~\cite{apf} & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
+nono~\cite{nono} & $\checkmark$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
+Sandlock~\cite{sandlock} & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark$ & $\times$ & $\times$ & $\checkmark^{\dagger}$ & $\times$ & $\times$ \\
 \midrule
-\textbf{\sys} & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ \\
+\textbf{\sys} & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ & $\checkmark^{*}$ & $\checkmark^{*}$ & $\checkmark$ & $\checkmark$ \\
 \bottomrule
 \end{tabular*}
 \vspace{3pt}
 \begin{minipage}{\textwidth}
 \footnotesize
 \textbf{Grants + controls}: programmable authorization with overriding restrictions.
+\textbf{Language sandbox}: restricted language features and APIs constrain executable agent code.
 \textbf{Domain broker}: extensible domain operations checked against the invocation grant.
 \textbf{Dual tool paths}: in-process and confined native-tool contracts.
 \textbf{Invocation grant}: tool requirements restricted by principal authorization and mandatory policy.
@@ -104,8 +104,10 @@ $\checkmark$: implemented in the reviewed scope; $\times$: the defined mechanism
 is not provided by the reviewed integration; custom extensions are excluded.
 $\dagger$Confinement follows configured sandbox permissions; the invocation-grant column separately
 measures their derivation from requirements and authorization.
-*In-process execution uses admitted APIs and trusted setup; hostile native code
-uses confinement. Flow tracking covers instrumented paths.}
+$\ddagger$CaMeL restricts interpreted orchestration; called native tool bodies
+remain outside that interpreter.
+*\sys restricts admitted tool bodies to monitored APIs under trusted setup;
+native code uses confinement. Flow tracking covers instrumented paths.}
 \label{tab:features}
 \end{table*}
 

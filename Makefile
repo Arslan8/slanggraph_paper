@@ -1,6 +1,8 @@
 PYTHON ?= python3
-FIGURES = figures/motivation.pdf figures/architecture.pdf figures/overhead.pdf
+FIGURES = figures/motivation.pdf figures/architecture.pdf figures/overhead.pdf \
+	figures/application-effects.pdf figures/application-runtime.pdf figures/audit-breakdown.pdf
 TEX_SOURCES = main.tex $(wildcard sections/*.tex)
+EVALUATION_DATA = evidence/application_macrobenchmarks_summary.json evidence/application_macrobenchmarks_source.md
 
 .PHONY: all clean check figures
 .DELETE_ON_ERROR:
@@ -8,7 +10,7 @@ TEX_SOURCES = main.tex $(wildcard sections/*.tex)
 all: main.pdf
 
 # The generator writes all figures together; run it only once, including with -j.
-figures: scripts/generate_figures.py
+figures: scripts/generate_figures.py $(EVALUATION_DATA)
 	"$(PYTHON)" scripts/generate_figures.py
 	@for figure in $(FIGURES); do test -s "$$figure" || exit 1; done
 

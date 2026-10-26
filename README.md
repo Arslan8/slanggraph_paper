@@ -23,6 +23,11 @@ process confinement, and flow policies need a shared invocation-grant contract;
 it then identifies the independent analysis and resource extension interfaces.
 Trust assumptions and coverage limits remain in the security model and evaluation.
 
+Table 1 separately identifies language-based sandboxing. CaMeL receives credit
+for its restricted orchestration interpreter; slangGraph receives credit for
+admitted tool bodies using monitored APIs. The caption states those scopes.
+Host lowering and dual execution paths remain separate capabilities.
+
 The evaluation now centers on the supplied application study: one protected
 Pandas computation integration, with SQL and Open Notebook baseline reproductions.
 It compares the original subprocess sandbox, added authorization, and authorization
@@ -42,6 +47,19 @@ Historical canaries, router/API checks, Linux tests, and policy-only measurement
 remain in `sections/component_evidence.tex` with their original snapshots.
 The policy-overhead figure is historical, not the source of the application
 timings. See `SUBMISSION_CHECKLIST.md` for remaining evidence requirements.
+
+The main evaluation uses figures for containment, runtime, and the audit-cost
+breakdown. Detailed outcome and latency tables remain in the appendix. The new
+figures read `evidence/application_macrobenchmarks_summary.json`, which records
+the source report's hash, cohort sizes, timer scopes, means, and SDs. The generator
+checks that source hash. Runtime plots show ratios to upstream A within each
+cohort, with SDs scaled by that same fixed baseline, not ratio confidence
+intervals. The prose also reports percentage increases: B/A 104.2% and C/A
+248.4% in replay; C/A 20.2% in the observed full workflow. The latter includes
+model and runner effects and is not isolated enforcement overhead. No box plots
+or raw distributions are inferred from the aggregates. The 20-call diagnostic
+shows the percentage of B's non-computation time spent in audit writes and is
+kept separate from the 100-call replay and five-run workflow cohorts.
 
 The low-level Landlock executor, object-broker worker, and deployment-backed
 bubblewrap executor have different integration coverage. Do not transfer
